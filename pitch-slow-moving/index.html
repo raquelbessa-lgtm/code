@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agente Slow Moving B2B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+<style>
+/* Identidade gogroup: azul protagonista, lima para o que importa, vermelho só para trava e atrito. */
+:root {
+  --azul: #2659A5;
+  --azul-escuro: #1B4583;
+  --lima: #D7D900;
+  --papel: #F5F0E8;
+  --tinta: #14213D;
+  --tinta-suave: #4E5A73;
+  --linha: #CFC8BA;
+  --vermelho: #E5381A;
+  --branco: #FFFFFF;
+  --fonte: "Poppins", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--azul-escuro); color: var(--tinta); font-family: var(--fonte); display: flex; flex-direction: column; }
+
+/* Barra de controle */
+.bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--branco); font-size: 14px; flex-wrap: wrap; }
+.bar .nome { font-weight: 600; margin-right: auto; }
+.bar button { font: 600 13px var(--fonte); color: var(--branco); background: transparent; border: 1.5px solid rgba(255,255,255,.6); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.bar button:hover { border-color: var(--branco); }
+.bar button.go { background: var(--lima); color: var(--azul-escuro); border-color: var(--lima); }
+.bar .pos { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: center; }
+.bar .relogio { font-variant-numeric: tabular-nums; opacity: .85; }
+.bar .relogio.estourou { color: var(--lima); opacity: 1; font-weight: 700; }
+:focus-visible { outline: 3px solid var(--lima); outline-offset: 2px; }
+
+/* Palco 16:9 que escala; tudo dentro usa unidades do palco (cqw) */
+.palco-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 16px 16px; container-type: size; }
+.palco { position: relative; flex: none; width: min(100cqw, calc(100cqh * 16 / 9)); aspect-ratio: 16 / 9; container-type: size; border-radius: 1.2cqw; overflow: hidden; background: var(--papel); box-shadow: 0 2cqw 5cqw -2cqw rgba(0,0,0,.45); }
+.palco-wrap:fullscreen { background: var(--azul-escuro); padding: 0; }
+.palco-wrap:fullscreen .palco { border-radius: 0; box-shadow: none; }
+
+.slide { position: absolute; inset: 0; padding: 5cqw 6.5cqw 5.6cqw; display: none; flex-direction: column; gap: 1.8cqw; }
+.slide.on { display: flex; }
+.slide.escuro { background: var(--azul); color: var(--branco); }
+.janela { position: absolute; top: 2.6cqw; right: 3cqw; font-size: 1.15cqw; font-weight: 500; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.marca { position: absolute; bottom: 2.6cqw; right: 3cqw; font-size: 1.7cqw; font-weight: 700; color: var(--azul); letter-spacing: -.02em; }
+
+h1, h2 { margin: 0; font-weight: 800; letter-spacing: -.025em; line-height: 1.02; text-wrap: balance; }
+h2 { font-size: 3.9cqw; color: var(--azul); max-width: 88%; }
+.escuro h2 { color: var(--lima); }
+p { margin: 0; }
+.nota { font-size: 1.15cqw; color: var(--tinta-suave); }
+.escuro .nota { color: rgba(255,255,255,.75); }
+.num { font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* Abertura */
+.capa { justify-content: space-between; padding-top: 4.4cqw; }
+.capa .projeto { font-size: 1.8cqw; font-weight: 600; color: var(--lima); letter-spacing: .02em; }
+.gigante { font-size: 22cqw; font-weight: 800; letter-spacing: -.06em; line-height: .82; color: var(--lima); font-variant-numeric: tabular-nums; }
+.capa .legenda { font-size: 3.4cqw; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; max-width: 22ch; color: var(--branco); margin-top: 1.4cqw; }
+.time { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.4cqw; }
+.time li { border-top: .45cqw solid var(--lima); padding-top: 1.2cqw; display: grid; gap: .3cqw; }
+.time b { font-size: 1.6cqw; white-space: nowrap; font-weight: 700; letter-spacing: -.015em; line-height: 1.15; }
+.time span { font-size: 1.25cqw; color: rgba(255,255,255,.8); }
+
+/* Dor: 27 SKUs */
+.dor { display: grid; grid-template-columns: 1fr 1fr; gap: 5cqw; align-items: center; flex: 1; }
+.grade27 { display: grid; grid-template-columns: repeat(9, 1fr); gap: .9cqw; max-width: 36cqw; }
+.cel { aspect-ratio: 1; border-radius: .4cqw; background: var(--azul); }
+.cel.parado { background: var(--vermelho); }
+.cel.gira { background: transparent; box-shadow: inset 0 0 0 .2cqw var(--azul); }
+.legenda-g { display: flex; gap: 2.4cqw; font-size: 1.2cqw; color: var(--tinta-suave); margin-top: 1.4cqw; flex-wrap: wrap; }
+.legenda-g i { display: inline-block; width: 1.2cqw; height: 1.2cqw; border-radius: .25cqw; vertical-align: -.15cqw; margin-right: .5cqw; }
+.fato .num { font-size: 9cqw; color: var(--vermelho); }
+.fato .num.azul { color: var(--azul); }
+.fato p { font-size: 2.2cqw; line-height: 1.3; font-weight: 600; max-width: 22ch; margin-top: 1cqw; }
+
+/* Ponte (frase grande) */
+.grande { font-size: 4.8cqw; font-weight: 800; letter-spacing: -.03em; line-height: 1.08; color: var(--lima); max-width: 20ch; text-wrap: balance; }
+.sub { font-size: 2.3cqw; line-height: 1.4; color: var(--branco); max-width: 44ch; }
+.dinheiro { display: flex; align-items: baseline; gap: 2cqw; flex-wrap: wrap; }
+.dinheiro .num { font-size: 12cqw; color: var(--branco); }
+.dinheiro span { font-size: 2.4cqw; font-weight: 600; color: rgba(255,255,255,.85); max-width: 16ch; line-height: 1.2; }
+
+/* Fluxo */
+.fluxo { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.6cqw; position: relative; }
+.elo { position: relative; padding-top: 1.6cqw; border-top: .4cqw solid rgba(255,255,255,.4); }
+.elo.agente { border-top-color: var(--lima); }
+.elo b { display: block; font-size: 1.9cqw; line-height: 1.15; color: var(--branco); letter-spacing: -.01em; }
+.elo.agente b { color: var(--lima); }
+.elo span { display: block; font-size: 1.3cqw; line-height: 1.4; color: rgba(255,255,255,.8); margin-top: .6cqw; }
+.elo:not(:last-child)::after { content: ""; position: absolute; top: -1.05cqw; right: -2.3cqw; width: 1.6cqw; height: 1.6cqw; border-top: .4cqw solid rgba(255,255,255,.6); border-right: .4cqw solid rgba(255,255,255,.6); transform: rotate(45deg); }
+.volta { margin-top: 2.4cqw; font-size: 1.4cqw; color: rgba(255,255,255,.8); display: flex; gap: 1cqw; align-items: center; }
+.volta i { flex: 1; height: .15cqw; background: rgba(255,255,255,.35); }
+.selo { display: inline-block; margin-top: 1cqw; font-size: 1.15cqw; font-weight: 700; color: var(--azul-escuro); background: var(--lima); border-radius: 999px; padding: .3cqw 1cqw; }
+
+/* Fluxo atual (slide claro) */
+.fluxo.claro { grid-template-columns: repeat(4, 1fr); gap: 3.4cqw; }
+.fluxo.claro .elo { border-top-color: var(--azul); }
+.fluxo.claro .elo b { color: var(--azul); }
+.fluxo.claro .elo span { color: var(--tinta-suave); }
+.fluxo.claro .elo:not(:last-child)::after { border-top-color: var(--azul); border-right-color: var(--azul); right: -2.7cqw; }
+.parou { font-size: 2.2cqw; font-weight: 700; color: var(--vermelho); letter-spacing: -.01em; }
+.antes-depois { display: grid; grid-template-columns: 1fr 1fr; gap: 3cqw; margin-top: auto; }
+.bloco { border-radius: 1cqw; padding: 1.8cqw 2.2cqw; display: grid; gap: .6cqw; align-content: start; }
+.bloco.nao { box-shadow: inset 0 0 0 .18cqw var(--linha); }
+.bloco.sim { background: var(--azul); color: var(--branco); }
+.bloco b { font-size: 1.3cqw; text-transform: uppercase; letter-spacing: .06em; }
+.bloco.nao b { color: var(--tinta-suave); }
+.bloco.sim b { color: var(--lima); }
+.bloco p { font-size: 1.8cqw; line-height: 1.3; font-weight: 600; }
+
+/* Regras do agente */
+.regras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.4cqw 3cqw; margin-top: auto; }
+.regra { padding-top: 1.2cqw; border-top: .4cqw solid rgba(255,255,255,.45); display: grid; gap: .5cqw; align-content: start; }
+.regra.lima { border-top-color: var(--lima); }
+.regra b { font-size: 1.75cqw; color: var(--branco); letter-spacing: -.01em; line-height: 1.2; }
+.regra.lima b { color: var(--lima); }
+.regra p { font-size: 1.3cqw; line-height: 1.4; color: rgba(255,255,255,.85); }
+
+/* Demo */
+.demo { display: grid; grid-template-columns: 1.55fr 1fr; gap: 3cqw; flex: 1; min-height: 0; }
+.tela { position: relative; background: var(--tinta); border-radius: 1cqw; overflow: hidden; display: grid; place-items: center; min-height: 0; }
+.tela video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.tela .vazia { text-align: center; color: var(--branco); padding: 2cqw; display: grid; gap: 1.2cqw; justify-items: center; }
+.tela .vazia p { font-size: 1.5cqw; color: rgba(255,255,255,.8); max-width: 40ch; }
+.tela label, .tela a { font: 600 1.4cqw var(--fonte); background: var(--lima); color: var(--azul-escuro); border-radius: 999px; padding: .9cqw 2cqw; cursor: pointer; text-decoration: none; }
+.tela a { background: transparent; color: var(--branco); box-shadow: inset 0 0 0 .15cqw rgba(255,255,255,.7); }
+.tela input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.roteiro-demo { display: grid; gap: 1.2cqw; align-content: start; }
+.roteiro-demo h3 { margin: 0; font-size: 2.1cqw; line-height: 1.15; color: var(--azul); letter-spacing: -.02em; }
+.roteiro-demo ol { margin: 0; padding-left: 2cqw; font-size: 1.5cqw; line-height: 1.55; }
+.roteiro-demo li::marker { color: var(--azul); font-weight: 700; }
+
+/* Métricas: A Meta */
+.meta-lado { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 3cqw; }
+.meta-lado div { padding-top: 1.3cqw; border-top: .4cqw solid rgba(255,255,255,.5); display: grid; gap: .6cqw; align-content: start; }
+.meta-lado div.chave { border-top-color: var(--lima); }
+.meta-lado b { font-size: 1.5cqw; text-transform: uppercase; letter-spacing: .05em; }
+.meta-lado .num { font-size: 5.6cqw; color: var(--lima); white-space: nowrap; }
+.meta-lado .num.menor { font-size: 3.4cqw; }
+.meta-lado p { font-size: 1.35cqw; line-height: 1.4; color: rgba(255,255,255,.88); }
+.piloto { display: grid; grid-template-columns: auto repeat(4, 1fr); gap: 2cqw; align-items: end; margin-top: auto; padding-top: 1.6cqw; border-top: .15cqw solid rgba(255,255,255,.3); }
+.piloto > b { font-size: 1.4cqw; color: var(--lima); align-self: center; max-width: 12ch; line-height: 1.25; }
+.piloto div { display: grid; gap: .3cqw; }
+.piloto span { font-size: 1.15cqw; color: rgba(255,255,255,.8); }
+.piloto .num { font-size: 3cqw; color: var(--branco); }
+.campo { min-width: 3ch; border-bottom: .15cqw dashed currentColor; outline: none; cursor: text; }
+.campo:focus { background: rgba(215,217,0,.18); }
+body.apresentando .campo { border-bottom-color: transparent; }
+
+/* Implantação */
+.tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3cqw; flex: 1; align-content: start; margin-top: .6cqw; }
+.item { padding-top: 1.4cqw; border-top: .4cqw solid var(--azul); display: grid; gap: .9cqw; align-content: start; }
+.item b { font-size: 2cqw; color: var(--azul); letter-spacing: -.01em; }
+.item ul { margin: 0; padding-left: 1.6cqw; display: grid; gap: .7cqw; }
+.item li { font-size: 1.45cqw; line-height: 1.4; }
+.item.trava { border-top-color: var(--vermelho); }
+.item.trava b { color: var(--vermelho); }
+.item.go { border-top-color: var(--lima); }
+.ja-temos { font-size: 1.5cqw; color: rgba(255,255,255,.9); margin-top: auto; }
+.ja-temos b { color: var(--lima); }
+
+/* Fechamento */
+.fecho { justify-content: center; gap: 2.4cqw; }
+.fecho .gigante { font-size: 16cqw; }
+
+/* Apêndice */
+.cadencia { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.4cqw; margin-top: 1cqw; }
+.toque { padding-top: 1.2cqw; border-top: .4cqw solid var(--azul); display: grid; gap: .5cqw; align-content: start; }
+.toque .num { font-size: 3.4cqw; color: var(--azul); }
+.toque.fim { border-top-color: var(--vermelho); }
+.toque.fim .num { color: var(--vermelho); }
+.toque p { font-size: 1.4cqw; line-height: 1.4; }
+.qa { display: grid; grid-template-columns: 1fr 1fr; gap: 2cqw 3.4cqw; margin-top: .6cqw; }
+.qa div { padding-top: 1.1cqw; border-top: .15cqw solid var(--linha); }
+.qa b { display: block; font-size: 1.5cqw; color: var(--azul); margin-bottom: .5cqw; }
+.qa p { font-size: 1.28cqw; line-height: 1.45; }
+
+/* Notas do apresentador */
+.notas { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(20,33,61,.95); color: var(--branco); font-size: 1.45cqw; line-height: 1.5; padding: 1.6cqw 3cqw; display: none; max-height: 48%; overflow: auto; }
+body.com-notas .notas { display: block; }
+.progresso { position: absolute; left: 0; bottom: 0; height: .35cqw; background: var(--lima); transition: width .3s; }
+
+@media (max-width: 640px) { .bar .dica { display: none; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="nome">Agente Slow Moving B2B</span>
+  <span class="dica">← → navega · N notas · Home zera o tempo</span>
+  <span class="relogio" id="relogio" title="Tempo desde o segundo slide">0:00</span>
+  <button id="ant" aria-label="Slide anterior">Anterior</button>
+  <span class="pos" id="pos" aria-live="polite">1/13</span>
+  <button id="prox" aria-label="Próximo slide">Próximo</button>
+  <button id="btnNotas">Notas</button>
+  <button class="go" id="btnTela">Apresentar</button>
+</div>
+
+<div class="palco-wrap" id="wrap">
+<div class="palco" id="palco">
+
+  <!-- 1 Abertura · 0:00 a 0:15 -->
+  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="“Sabe quantos dos nossos produtos Barbours estão parados? (pausa) Noventa e seis por cento. Na Gobeauté, são 5,1 milhões de reais parados. Somos o time do Agente Slow Moving B2B, e viemos transformar esse estoque em dinheiro.”">
+    <p class="projeto">GoHacks · Tema 4, Slow moving · Agente Slow Moving B2B</p>
+    <div>
+      <div class="gigante">96%</div>
+      <p class="legenda">dos Barbours de maior valor estão parados</p>
+    </div>
+    <ul class="time">
+      <li><b>Wilkerson Fernandes</b><span>DP</span></li>
+      <li><b>Larissa Queiroz</b><span>B2B</span></li>
+      <li><b>Raquel Bessa</b><span>Marketing de Influência</span></li>
+      <li><b>Rafael Craveiro</b><span>Operações B2B Gobeauté</span></li>
+    </ul>
+  </section>
+
+  <!-- 2 Dor · 0:15 a 0:50 (1/2) -->
+  <section class="slide" data-janela="Dor e usuário-chave · 0:15 a 0:50" data-nota="“Três em cada quatro desses produtos têm mais de um ano de estoque. É dinheiro parado e espaço ocupado.”">
+    <h2>3 em cada 4 têm mais de 1 ano de estoque</h2>
+    <div class="dor">
+      <div>
+        <div class="grade27" id="g27" aria-label="27 SKUs Barbours: 20 com mais de 1 ano de estoque, 6 entre 180 dias e 1 ano, 1 girando"></div>
+        <div class="legenda-g">
+          <span><i style="background:var(--vermelho)"></i>mais de 1 ano: 20</span>
+          <span><i style="background:var(--azul)"></i>180 dias a 1 ano: 6</span>
+          <span><i style="box-shadow:inset 0 0 0 .2cqw var(--azul)"></i>girando: 1</span>
+        </div>
+      </div>
+      <div class="fato">
+        <div class="num">20 de 27</div>
+        <p>SKUs Barbours do topo do B2B têm estoque para mais de um ano</p>
+      </div>
+    </div>
+    <p class="nota">Fonte: Torre B2B, snapshot de 15/10/2026, SKUs Barbours entre os 40 de maior valor em estoque no B2B. Cobertura no ritmo de venda dos últimos 15 dias. 26 de 27 passam de 180 dias (96%).</p>
+  </section>
+
+  <!-- 3 Dor · 0:15 a 0:50 (2/2) -->
+  <section class="slide escuro" data-janela="Dor e usuário-chave · 0:15 a 0:50" data-nota="“A gente tem o produto que sobra e o cliente que sumiu, e ninguém liga os dois. Vender o que não sai dá mais trabalho do que vender o que sai. Então nenhum vendedor nosso quer perder tempo nesses produtos.”">
+    <div class="dinheiro"><span class="num">R$ 5,1 mi</span><span>parados na Gobeauté</span></div>
+    <p class="grande" style="margin-top:auto">O produto que sobra e o cliente que sumiu. Ninguém liga os dois.</p>
+    <p class="sub">Vender o que não sai dá mais trabalho, e nenhum vendedor quer gastar tempo nisso.</p>
+    <p class="nota">Fonte: slow moving oficial da Gobeauté (19,2% de R$ 26,6 mi em estoque, 774 SKUs).</p>
+  </section>
+
+  <!-- 4 Fluxo atual · 0:50 a 1:20 -->
+  <section class="slide" data-janela="Fluxo atual · 0:50 a 1:20" data-nota="“Hoje isso é manual: alguém escolhe o produto, escolhe a quem oferecer, pede a condição e escreve para um cliente de cada vez. E quando o produto não sai, ninguém faz. Nosso alvo não é quem já compra. Quem já compra, compra. O alvo é o varejista e o cliente menor que comprou há muito tempo e parou. Para ele, uma oferta relâmpago, melhor, de um único produto. Escolha fácil e rápida, sem deixar margem para indecisão.”">
+    <h2>Hoje, manual. Amanhã, um alvo certo e uma oferta sem dúvida.</h2>
+    <div class="fluxo claro" style="margin-top:1.4cqw">
+      <div class="elo"><b>Escolhe o produto</b><span>Alguém decide o que empurrar</span></div>
+      <div class="elo"><b>Escolhe a quem</b><span>Na memória do vendedor</span></div>
+      <div class="elo"><b>Pede a condição</b><span>Preço e prazo esperam aprovação</span></div>
+      <div class="elo"><b>Escreve um a um</b><span>Um cliente de cada vez</span></div>
+    </div>
+    <p class="parou">E quando o produto não sai, ninguém faz.</p>
+    <div class="antes-depois">
+      <div class="bloco nao"><b>Não é o alvo</b><p>Quem já compra. Quem já compra, compra.</p></div>
+      <div class="bloco sim"><b>O alvo</b><p>O varejista e o cliente menor que comprou e parou. Para ele, uma oferta relâmpago de um único produto.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 Solução com IA · 1:20 a 2:10 (1/2) -->
+  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="“O agente opera sozinho, do começo ao fim. Escolhe o produto de slow moving ou descontinuado. Escolhe os clientes que compraram e pararam. Monta uma caixa fechada, com um único produto e a oferta já definida, dentro da faixa de tabela e acima do piso de margem: o cliente só precisa dizer sim ou não. Envia pelo WhatsApp, e o cliente fecha pelo link, sem ninguém no meio.”">
+    <h2>O agente opera sozinho, do começo ao fim</h2>
+    <div class="fluxo" style="margin-top:auto">
+      <div class="elo agente"><b>Escolhe o produto</b><span>Slow moving ou descontinuado</span></div>
+      <div class="elo agente"><b>Escolhe o cliente que parou</b><span>Comprou e sumiu. Nunca quem já compra</span></div>
+      <div class="elo agente"><b>Monta a proposta</b><span>Caixa fechada, um produto, oferta definida, dentro da tabela e acima do piso de margem</span></div>
+      <div class="elo agente"><b>Envia</b><span>WhatsApp, com o link do pedido</span></div>
+      <div class="elo"><b>O cliente fecha pelo link</b><span>Só diz sim ou não</span><em class="selo">sem ninguém no meio</em></div>
+    </div>
+    <p class="volta"><i></i>Cada resposta volta para a Torre e melhora a próxima oferta<i></i></p>
+  </section>
+
+  <!-- 6 Solução com IA · 1:20 a 2:10 (2/2) -->
+  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="“Cliente inadimplente recebe proposta para pagar à vista. Cliente com score alto recebe prazo de 30 a 90 dias. E toda semana aparece uma oferta nova, para uma base diferente, escolhida pelo comportamento de compra e pela qualificação do cliente. Cada cliente recebe pelo menos uma oferta por mês. Se ele não responde, em dois dias o agente manda um update.”">
+    <h2>A condição certa para cada cliente, toda semana</h2>
+    <div class="regras">
+      <div class="regra"><b>Inadimplente</b><p>Recebe a proposta para pagar à vista.</p></div>
+      <div class="regra lima"><b>Score alto</b><p>Recebe prazo de 30 a 90 dias.</p></div>
+      <div class="regra"><b>Toda semana</b><p>Uma oferta nova, para uma base diferente, pelo comportamento de compra e pela qualificação do cliente.</p></div>
+      <div class="regra"><b>Todo mês</b><p>Cada cliente recebe pelo menos uma oferta.</p></div>
+      <div class="regra lima"><b>Em 2 dias</b><p>Sem resposta, o agente manda um update.</p></div>
+      <div class="regra"><b>Sim ou não</b><p>Um único produto, validade curta, nenhuma margem para indecisão.</p></div>
+    </div>
+  </section>
+
+  <!-- 7 Demo · 2:10 a 3:30 -->
+  <section class="slide" data-janela="Demo · 2:10 a 3:30" data-nota="DEMO. Não corte a demo: se faltar tempo, corte texto dos outros blocos. Narre por cima do vídeo seguindo o roteiro ao lado. Se o envio automático ainda não estiver no ar, mostre o que roda hoje (radar e cartão do cliente com contato e mensagem pronta) e diga: o envio automático é o próximo passo do piloto.">
+    <h2>Funcionando</h2>
+    <div class="demo">
+      <div class="tela" id="tela">
+        <div class="vazia">
+          <p>Carregue o vídeo da demo. Ele fica só neste navegador e não é enviado a lugar nenhum.</p>
+          <label for="arquivo">Carregar vídeo da demo</label>
+          <input type="file" id="arquivo" accept="video/*">
+          <a href="https://agente-estoque-parado.devgogroup.com/" target="_blank" rel="noopener">Abrir o agente ao vivo</a>
+        </div>
+      </div>
+      <div class="roteiro-demo">
+        <h3>O que a demo mostra</h3>
+        <ol>
+          <li>O agente escolhe um Barbours parado</li>
+          <li>Escolhe os clientes que compraram e pararam</li>
+          <li>Monta a proposta: um produto, preço e condição, validade</li>
+          <li>Envia pelo WhatsApp para um número de teste</li>
+          <li>O cliente abre o link e fecha o pedido</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 Métricas e projeção · 3:30 a 4:00 -->
+  <section class="slide escuro" data-janela="Métricas e projeção · 3:30 a 4:00" data-nota="“Esse público já foi nosso. São 281 clientes que compraram 1,3 milhão de reais em Barbours este ano e pararam: uns 4,6 mil reais por cliente. A cada dez que voltam, são 46 mil reais, sem um vendedor a mais. E cada venda tira produto parado da prateleira. No piloto a gente mede quatro números: propostas enviadas, abertas, fechadas e valor aprovado. Em duas semanas a gente sabe quanto desse 1,3 milhão volta.”">
+    <h2>Esse público já foi nosso</h2>
+    <div class="meta-lado">
+      <div class="chave"><b>Ganho</b><span class="num">R$ 1,3 mi</span><p>que 281 clientes parados há mais de 180 dias já compraram em Barbours este ano: uns R$ 4,6 mil cada. <strong>A cada 10 que voltam, R$ 46 mil.</strong></p></div>
+      <div><b>Inventário</b><span class="num menor">sai da prateleira</span><p>Cada pedido tira produto parado do estoque, medido a custo, pedido a pedido.</p></div>
+      <div><b>Despesa operacional</b><span class="num">+ R$ 0</span><p>Sem vendedor a mais e sem ferramenta nova.</p></div>
+    </div>
+    <div class="piloto">
+      <b>No piloto, 4 números</b>
+      <div><span>Propostas enviadas</span><span class="num campo" contenteditable="true" data-k="enviadas" data-ph="?">?</span></div>
+      <div><span>Abertas</span><span class="num campo" contenteditable="true" data-k="abertas" data-ph="?">?</span></div>
+      <div><span>Fechadas</span><span class="num campo" contenteditable="true" data-k="fechadas" data-ph="?">?</span></div>
+      <div><span>Valor aprovado</span><span class="num campo" contenteditable="true" data-k="valor" data-ph="R$ ?">R$ ?</span></div>
+    </div>
+    <p class="nota">Fonte: Torre B2B, base desde 02/01/2026. Receita, não margem. R$ 1,3 mi é teto histórico, não previsão.</p>
+  </section>
+
+  <!-- 9 Impacto e implantação · 4:00 a 5:00 (1/2) -->
+  <section class="slide escuro" data-janela="Impacto e implantação · 4:00 a 5:00" data-nota="“Nada novo para comprar: Torre, Data Mart, GoDeploy e Gira, que o grupo já tem. Toda semana o agente escolhe um produto parado e uma base de clientes que pararam, monta a oferta, envia e acompanha. O cliente fecha pelo link, e o resultado volta para a Torre e melhora a oferta seguinte.”">
+    <h2>Como liga</h2>
+    <div class="fluxo" style="margin-top:auto">
+      <div class="elo"><b>Torre e Data Mart</b><span>Estoque, pedidos, crédito e contato de cada cliente</span></div>
+      <div class="elo agente"><b>Agente</b><span>No GoDeploy: escolhe produto e base, monta a oferta</span></div>
+      <div class="elo"><b>WhatsApp</b><span>Proposta com validade e update em 2 dias</span></div>
+      <div class="elo"><b>Link do Gira</b><span>O cliente fecha o pedido sozinho</span></div>
+      <div class="elo"><b>Torre</b><span>O pedido volta e ajusta a próxima oferta</span></div>
+    </div>
+    <p class="volta"><i></i>Toda semana, um produto parado e uma base nova<i></i></p>
+    <p class="ja-temos"><b>Nada novo para comprar:</b> Torre, Data Mart, GoDeploy e Gira, que o grupo já tem.</p>
+  </section>
+
+  <!-- 10 Impacto e implantação · 4:00 a 5:00 (2/2) -->
+  <section class="slide" data-janela="Impacto e implantação · 4:00 a 5:00" data-nota="“Para o vendedor, muda que ele não precisa mais escolher cliente nem escrever mensagem. Para o grupo, o agente tem travas: nunca passa do piso de margem, inadimplente só recebe proposta à vista, e o cliente pode pedir para sair. Precisamos de duas aprovações: a alçada de preço e prazo com o comercial, e o piso de margem com Finanças. Na segunda-feira começa o piloto: um produto de Barbours, clientes que pararam, duas semanas.”">
+    <h2>O que muda, as travas e o piloto</h2>
+    <div class="tres">
+      <div class="item"><b>O que muda</b><ul>
+        <li>O vendedor não escolhe mais cliente nem escreve mensagem.</li>
+        <li>O cliente que parou recebe uma oferta clara e fecha sozinho.</li>
+      </ul></div>
+      <div class="item trava"><b>Travas</b><ul>
+        <li>Nunca abaixo do piso de margem.</li>
+        <li>Inadimplente só recebe proposta à vista.</li>
+        <li>O cliente pode pedir para sair.</li>
+      </ul></div>
+      <div class="item go"><b>Piloto na segunda</b><ul>
+        <li>Um produto Barbours, clientes que pararam, 2 semanas.</li>
+        <li>Precisa de 2 aprovações: alçada de preço e prazo (Comercial) e piso de margem (Finanças).</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- 11 Fechamento · até 5:00 -->
+  <section class="slide escuro fecho" data-janela="Impacto e implantação · até 5:00" data-nota="“Noventa e seis por cento dos Barbours estão parados. Em quinze dias, a gente volta aqui com quanto desse estoque virou dinheiro.”">
+    <div class="gigante">96%</div>
+    <p class="grande">Em 15 dias, a gente volta com quanto desse estoque virou dinheiro.</p>
+  </section>
+
+  <!-- 12 Apêndice: cadência -->
+  <section class="slide" data-janela="Apêndice" data-nota="Use se a banca perguntar sobre excesso de mensagens ou cadência.">
+    <h2>Cadência proposta: no máximo 3 toques</h2>
+    <div class="cadencia">
+      <div class="toque"><span class="num">D0</span><p>Proposta relâmpago com link e validade curta.</p></div>
+      <div class="toque"><span class="num">D+2</span><p>Update, se não houve resposta.</p></div>
+      <div class="toque"><span class="num">D+5</span><p>Último toque.</p></div>
+      <div class="toque fim"><span class="num">Para</span><p>Quando o cliente responde, compra ou pede para sair.</p></div>
+    </div>
+    <p class="nota" style="margin-top:auto">Ritmo: toda semana uma base diferente; cada cliente recebe pelo menos uma oferta por mês.</p>
+  </section>
+
+  <!-- 13 Apêndice: sabatina -->
+  <section class="slide" data-janela="Apêndice" data-nota="Respostas curtas. Se não souber: ainda não chegamos lá, o próximo passo é...">
+    <h2>Para a sabatina</h2>
+    <div class="qa">
+      <div><b>Por que não oferecer a quem já compra?</b><p>Quem já compra, compra. Oferecer desconto a ele só troca uma venda cheia por uma com desconto. O ganho está em quem parou.</p></div>
+      <div><b>De onde vem o R$ 1,3 mi?</b><p>Receita de Barbours em 2026 dos 281 clientes que não compram nada há mais de 180 dias (Torre, base desde 02/01/2026). É teto histórico e receita, não margem nem previsão.</p></div>
+      <div><b>96% ou 19,2%?</b><p>Os 96% são os Barbours entre os 40 SKUs de maior valor no B2B, acima de 180 dias de cobertura. Os R$ 5,1 mi são o slow moving oficial da Gobeauté, com critério do planejamento.</p></div>
+      <div><b>E se o agente der desconto demais?</b><p>Ele não passa do piso de margem nem sai da faixa de tabela do cliente. A alçada de preço e prazo é aprovada pelo comercial antes do piloto.</p></div>
+      <div><b>O cliente não vai se irritar?</b><p>No máximo 3 toques, uma oferta por semana para bases diferentes, e o cliente pode pedir para sair a qualquer momento.</p></div>
+      <div><b>Como sabemos se deu certo?</b><p>Propostas enviadas, abertas, fechadas e valor aprovado, na Torre, em 2 semanas. Sem número simulado.</p></div>
+    </div>
+  </section>
+
+  <span class="janela" id="janela"></span>
+  <span class="marca" id="marca">gogroup</span>
+  <div class="notas" id="notas"></div>
+  <div class="progresso" id="progresso"></div>
+</div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const slides = [...document.querySelectorAll(".slide")];
+  let i = 0, inicio = null, tick = null;
+
+  // 27 SKUs Barbours: 20 acima de 1 ano, 6 entre 180 dias e 1 ano, 1 girando
+  $("#g27").innerHTML = Array.from({ length: 27 }, (_, k) => `<span class="cel${k < 20 ? " parado" : k === 26 ? " gira" : ""}"></span>`).join("");
+
+  function mostrar(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle("on", k === i));
+    const s = slides[i];
+    $("#pos").textContent = (i + 1) + "/" + slides.length;
+    $("#janela").textContent = s.dataset.janela || "";
+    $("#notas").textContent = s.dataset.nota || "";
+    $("#progresso").style.width = ((i + 1) / slides.length * 100) + "%";
+    const escuro = s.classList.contains("escuro");
+    $("#janela").style.color = escuro ? "rgba(255,255,255,.7)" : "";
+    $("#marca").style.color = escuro ? "#fff" : "";
+    if (i > 0 && !inicio) { inicio = Date.now(); tick = setInterval(relogio, 1000); }
+  }
+  function relogio() {
+    const t = Math.floor((Date.now() - inicio) / 1000);
+    $("#relogio").textContent = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+    $("#relogio").classList.toggle("estourou", t >= 300);
+  }
+
+  $("#ant").onclick = () => mostrar(i - 1);
+  $("#prox").onclick = () => mostrar(i + 1);
+  $("#btnNotas").onclick = () => document.body.classList.toggle("com-notas");
+  $("#btnTela").onclick = () => {
+    const w = $("#wrap");
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    document.body.classList.add("apresentando");
+    if (w.requestFullscreen) w.requestFullscreen().catch(() => {});
+  };
+  document.addEventListener("fullscreenchange", () => document.body.classList.toggle("apresentando", !!document.fullscreenElement));
+  document.addEventListener("keydown", (e) => {
+    if (document.activeElement && document.activeElement.isContentEditable) return;
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); mostrar(i + 1); }
+    if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); mostrar(i - 1); }
+    if (e.key === "n" || e.key === "N") document.body.classList.toggle("com-notas");
+    if (e.key === "Home") { inicio = null; clearInterval(tick); $("#relogio").textContent = "0:00"; $("#relogio").classList.remove("estourou"); mostrar(0); }
+  });
+
+  // Vídeo da demo: arquivo local, só neste navegador
+  $("#arquivo").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const v = document.createElement("video");
+    v.src = URL.createObjectURL(f); v.controls = true; v.playsInline = true;
+    $("#tela").replaceChildren(v);
+  });
+
+  // Números do piloto: digitados pela equipe, salvos neste navegador
+  const KEY = "pitch-slow-moving-b2b-piloto";
+  let dados = {};
+  try { dados = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+  document.querySelectorAll(".campo").forEach((c) => {
+    if (dados[c.dataset.k]) c.textContent = dados[c.dataset.k];
+    c.addEventListener("focus", () => {
+      if (c.textContent === c.dataset.ph) { const r = document.createRange(); r.selectNodeContents(c); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    });
+    c.addEventListener("input", () => {
+      const t = c.textContent.trim();
+      if (t && t !== c.dataset.ph) dados[c.dataset.k] = t; else delete dados[c.dataset.k];
+      try { localStorage.setItem(KEY, JSON.stringify(dados)); } catch (e) {}
+    });
+    c.addEventListener("blur", () => { if (!c.textContent.trim()) c.textContent = c.dataset.ph; });
+    c.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); c.blur(); } });
+  });
+
+  mostrar(0);
+})();
+</script>
+</body>
+</html>
