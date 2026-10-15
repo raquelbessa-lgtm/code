@@ -166,6 +166,12 @@ body.apresentando .campo { border-bottom-color: transparent; }
 .ja-temos { font-size: 1.5cqw; color: rgba(255,255,255,.9); margin-top: auto; }
 .ja-temos b { color: var(--lima); }
 
+/* Abertura: os dois números lado a lado */
+.par { display: grid; grid-template-columns: auto auto; justify-content: start; gap: 6cqw; margin-top: auto; }
+.slide .par .gigante { font-size: 10cqw; white-space: nowrap; }
+.par .legenda { font-size: 2.4cqw; max-width: 18ch; }
+.par + .nota { margin-top: auto; }
+
 /* Fechamento */
 .fecho { justify-content: center; gap: 2.4cqw; }
 .fecho .gigante { font-size: 16cqw; }
@@ -218,10 +224,11 @@ body.com-notas .notas { display: block; }
 
   <!-- 2 Abertura · 0:00 a 0:15 · o impacto em um número -->
   <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:15" data-nota="“Sabe quantos dos nossos produtos Barbours estão parados? (pausa) Noventa e seis por cento. Na Gobeauté, são 5,1 milhões de reais parados. E a gente veio transformar esse estoque em dinheiro.”">
-    <div class="gigante">96%</div>
-    <p class="legenda">dos Barbours de maior valor estão parados</p>
-    <p class="nota" style="order:9;margin-top:auto">R$ 5,1 mi: slow moving oficial da Gobeauté (19,2% de R$ 26,6 mi em estoque, 774 SKUs).</p>
-    <div class="dinheiro" style="margin-top:1cqw"><span class="num" style="font-size:8cqw">R$ 5,1 mi</span><span>parados na Gobeauté</span></div>
+    <div class="par">
+      <div><div class="gigante">96%</div><p class="legenda">dos Barbours de maior valor estão parados</p></div>
+      <div><div class="gigante">R$ 5,1 mi</div><p class="legenda">parados na Gobeauté</p></div>
+    </div>
+    <p class="nota">R$ 5,1 mi: slow moving oficial da Gobeauté (19,2% de R$ 26,6 mi em estoque, 774 SKUs).</p>
   </section>
 
   <!-- 2 Dor · 0:15 a 0:50 (1/2) -->
