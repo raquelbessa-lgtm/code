@@ -8,3 +8,10 @@
 
 ANTES DE PUBLICAR: o app é editado por mais de uma pessoa. Confira a versão no GoDeploy (`getApp`): se não for a 12, baixe a nova e aplique o patch em cima, em vez de enviar `app/` inteiro, senão o trabalho do outro é apagado.
 Publicar = `updateApp` com TODOS os arquivos de `app/` (src/worker.ts, agente.ts, contatos.ts, data.ts, reais.ts e index.html como asset).
+
+## Contatos dos clientes B2B (Torre)
+Os cartões B2B mostram telefone e e-mail reais, vindos da Torre (`dim_cliente` + `cliente_contato_whatsapp` validado).
+- `contatos/torre_contatos.sql` busca o melhor contato dos clientes dos cartões; `contatos/gerar_contatos_torre.py` transforma o resultado em `app/src/contatos_torre.ts`.
+- No git, `contatos_torre.ts` fica **vazio** (tem dado pessoal). Antes de publicar, gere o arquivo preenchido; depois de publicar, não commite o preenchido.
+- Quem não está no arquivo cai no Tiny ao vivo (login de quem usa). Rede com várias filiais no mesmo nome não recebe contato chutado: o cartão pede para confirmar a loja.
+- Contato é um retrato de uma data (`TORRE_GERADO_EM`). Alternativa sem dado no código: consultar a Torre ao vivo com uma chave guardada como segredo do app.

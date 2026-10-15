@@ -1,579 +1,6 @@
-diff -ruN v12-original/src/agente.ts app/src/agente.ts
---- v12-original/src/agente.ts	2026-10-15 17:16:00.761596677 +0000
-+++ app/src/agente.ts	2026-10-15 17:23:07.679628638 +0000
-@@ -40,6 +40,19 @@
- 
- export type Classe = "parado" | "em_risco" | "saudavel" | "campeao";
- 
-+// Cartão de ação B2B: tudo que o vendedor precisa para agir em um cliente, sem ler texto corrido.
-+export type ContatoCliente = { telefone?: string; email?: string; fonte: string };
-+export type AcaoCliente = {
-+  tipo: "reativar" | "incluir";
-+  cliente: string; cidade: string; uf: string; vendedor: string;
-+  situacao: string; // por que este cliente foi escolhido
-+  quantidade: number; precoUn: number; valorPedido: number;
-+  condicao: string; braco: string; faixa: string; validade: string;
-+  aviso?: string; // crédito
-+  contato: ContatoCliente | null; // o worker preenche pelo Data Mart (Tiny); null = não achou
-+  whatsapp: string; emailAssunto: string; emailCorpo: string;
-+};
-+
- export type Mensagem = {
-   time: string;
-   oQueFazer: string;
-@@ -48,6 +61,7 @@
-   pronto: string;
-   executar: { canal: string; passos: string[] }; // como colocar a ação no ar logo depois da análise
-   porVendedor?: { vendedor: string; clientes: number; unidades: number; texto: string }[]; // B2B: mensagem pronta por vendedor
-+  acoes?: AcaoCliente[]; // B2B: um cartão por cliente, com contato e mensagens prontas
- };
- 
- export type Analise = {
-@@ -203,19 +217,76 @@
-     return v > 30000 ? ` Pedido de ${brl(v)} passa do teto da classe A (R$ 30 mil): dividir ou pagar parte à vista.`
-       : v > 5000 ? ` Pedido de ${brl(v)}: a prazo só para classe ${v > 20000 ? "A" : "A ou B"} na Torre.` : "";
-   };
-+  const primeiro = (n: string) => n.split(" ")[0];
-+  const nomeMarca = p.marca ?? "Gobeauté";
-+  const dinheiro = (v: number) => brl(Math.round(v * 100) / 100);
-+  const acoes: AcaoCliente[] = recompra.map(r => {
-+    const c = condicao(r), qtd = qtdSugerida(r), reat = r.situacao === "parado";
-+    const whatsapp = reat
-+      ? `Oi, tudo bem? Aqui é ${primeiro(r.vendedor)}, da ${nomeMarca}. Olhei o histórico da ${r.cliente} e vi que vocês repunham ${p.produto} a cada ~${r.intervalo} dias (média de ${int(r.qtd_media)} un), mas o último pedido desse item foi há ${r.dias_sem} dias. Por isso deixei uma condição pronta para repor: ${int(qtd)} un a ${c.texto}, válida até ${ate}. Posso montar o pedido e te mandar o link para aprovar?`
-+      : `Oi, tudo bem? Aqui é ${primeiro(r.vendedor)}, da ${nomeMarca}. Vi que a ${r.cliente} segue comprando com a gente, mas não pede ${p.produto} há ${r.dias_sem} dias (vocês costumavam pedir a cada ~${r.intervalo}). No seu próximo pedido posso incluir ${int(qtd)} un a ${c.texto}, válida até ${ate}. Quer que eu já deixe no pedido?`;
-+    const emailAssunto = reat ? `${p.produto}: condição para repor o estoque da ${r.cliente}` : `${p.produto}: condição para incluir no seu próximo pedido`;
-+    const emailCorpo = reat
-+      ? `Olá!\n\nOlhando o histórico da ${r.cliente}, vimos que vocês repunham ${p.produto} a cada ~${r.intervalo} dias (média de ${int(r.qtd_media)} un) e o último pedido desse item foi há ${r.dias_sem} dias.\n\nPor isso preparamos uma condição para repor: ${int(qtd)} un a ${c.texto}, válida até ${ate}.\n\nSe fizer sentido, respondo este e-mail com o link do pedido pronto para aprovação.\n\nAbraço,\n${r.vendedor}\n${nomeMarca}`
-+      : `Olá!\n\nVimos que a ${r.cliente} segue comprando com a gente, mas não pede ${p.produto} há ${r.dias_sem} dias (costumava pedir a cada ~${r.intervalo}).\n\nNo seu próximo pedido podemos incluir ${int(qtd)} un a ${c.texto}, válida até ${ate}.\n\nSe quiser, deixo o item já incluído no pedido.\n\nAbraço,\n${r.vendedor}\n${nomeMarca}`;
-+    return {
-+      tipo: reat ? "reativar" : "incluir",
-+      cliente: r.cliente, cidade: r.cidade, uf: r.uf, vendedor: r.vendedor,
-+      situacao: reat
-+        ? `Parado: nenhum pedido deste item há ${r.dias_sem} dias (comprava ~${int(r.qtd_media)} un a cada ${r.intervalo} dias, ${r.pedidos} pedidos no último ano) e sem pedido de nada desde então.`
-+        : `Ativo: segue comprando outros itens, mas não pede este há ${r.dias_sem} dias (costumava a cada ${r.intervalo}). Oferecer metade da quantidade de sempre, junto do próximo pedido.`,
-+      quantidade: qtd, precoUn: c.preco, valorPedido: Math.round(qtd * c.preco * 100) / 100,
-+      condicao: c.texto, braco: braco(r), faixa: faixa(r).nome, validade: ate,
-+      aviso: avisoCredito(r).trim() || undefined,
-+      contato: null,
-+      whatsapp, emailAssunto, emailCorpo,
-+    } as AcaoCliente;
-+  });
-   const vendedores = [...new Set(recompra.map(r => r.vendedor))];
-+  // Bloco legível de um cliente (usado no resumo, no Chat e na mensagem por vendedor).
-+  const blocoCliente = (x: AcaoCliente, n: number, comEmail = false) =>
-+    `${n}) ${x.tipo === "reativar" ? "REATIVAR" : "INCLUIR NO PRÓXIMO PEDIDO"}: ${x.cliente} (${x.cidade}/${x.uf})\n` +
-+    `   Situação: ${x.situacao}\n` +
-+    `   Oferta: ${int(x.quantidade)} un a ${dinheiro(x.precoUn)} = ${dinheiro(x.valorPedido)}. ${x.condicao}. Teste ${x.braco}, tabela ${x.faixa}. Validade ${x.validade}.\n` +
-+    (x.aviso ? `   Atenção: ${x.aviso}\n` : "") +
-+    `   Contato: ${x.contato ? [x.contato.telefone, x.contato.email].filter(Boolean).join(" · ") + ` (${x.contato.fonte})` : `buscar no app ou na Torre, conta de ${x.vendedor}`}\n` +
-+    `   WhatsApp: "${x.whatsapp}"` +
-+    (comEmail ? `\n   E-mail, assunto: ${x.emailAssunto}\n   ${x.emailCorpo.split("\n").join("\n   ")}` : "");
-   const porVendedor = vendedores.map(vend => {
--    const lista = recompra.filter(r => r.vendedor === vend);
--    const linhas = lista.map(r => r.situacao === "parado"
--      ? `- REATIVAR [teste ${braco(r)}, tabela ${faixa(r).nome}] ${r.cliente} (${r.cidade}/${r.uf}): comprava cerca de ${int(r.qtd_media)} un a cada ${r.intervalo} dias, não pede este há ${r.dias_sem} dias e a conta está sem pedido há mais tempo que o normal dela. ` +
--        `Mensagem: "Oi! Faz tempo que não falamos. Separei ${int(qtdSugerida(r))} un de ${p.produto} a ${condicao(r).texto}, condição até ${ate}. Posso montar o pedido?"${avisoCredito(r)}`
--      : `- INCLUIR NO PRÓXIMO PEDIDO [teste ${braco(r)}, tabela ${faixa(r).nome}] ${r.cliente} (${r.cidade}/${r.uf}): segue comprando outros itens, mas não pede este há ${r.dias_sem} dias (costumava a cada ${r.intervalo}). ` +
--        `Mensagem: "Oi! No seu próximo pedido, posso incluir ${int(qtdSugerida(r))} un de ${p.produto} a ${condicao(r).texto}? Condição até ${ate}."${avisoCredito(r)}`);
-+    const lista = acoes.filter(x => x.vendedor === vend);
-     return {
--      vendedor: vend, clientes: lista.length, unidades: lista.reduce((t, r) => t + qtdSugerida(r), 0),
--      texto: `${vend}, ${lista.length === 1 ? "este cliente" : "estes clientes"} de ${p.produto}:\n${linhas.join("\n")}`,
-+      vendedor: vend, clientes: lista.length, unidades: lista.reduce((t, x) => t + x.quantidade, 0),
-+      texto: `${vend}, ${lista.length === 1 ? "este cliente" : "estes clientes"} de ${p.produto}:\n\n${lista.map((x, k) => blocoCliente(x, k + 1, true)).join("\n\n")}`,
-     };
-   });
-+  // B2B: título, passos e resumo. O resumo recebe só o espaço que sobra no Chat (~4 mil caracteres) depois de título e passos.
-+  const nomesDe = (l: Recompra[]) => l.slice(0, 3).map(r => r.cliente).join(", ") + (l.length > 3 ? ` e mais ${l.length - 3}` : "");
-+  const pctEstoque = Math.max(1, Math.round((recompraUn / p.estoque_un) * 100));
-+  const tituloB2B = ((t: string) => t.charAt(0).toUpperCase() + t.slice(1))([
-+    reativar.length ? `reative ${reativar.length} cliente${reativar.length > 1 ? "s" : ""} parado${reativar.length > 1 ? "s" : ""} (${nomesDe(reativar)})` : "",
-+    incluir.length ? `inclua no próximo pedido de ${incluir.length} cliente${incluir.length > 1 ? "s" : ""} ativo${incluir.length > 1 ? "s" : ""} (${nomesDe(incluir)})` : ""]
-+    .filter(Boolean).join(" e ")) + `: ${int(recompraUn)} un, ${pctEstoque}% do estoque`;
-+  const clientesB = acoes.filter(x => x.braco === "B");
-+  const passosB2B = [
-+    "Pegar o ok do gestor comercial para as condições A e B",
-+    `Conferir o crédito na Torre antes de oferecer o prazo do braço B${clientesB.length ? `: ${clientesB.length <= 3 ? clientesB.map(x => x.cliente).join(", ") : `${clientesB.length} clientes (lista no app)`}` : " (nenhum cliente no braço B desta ação)"}`,
-+    "Abrir o cartão de cada cliente no app: contato e mensagem já estão prontos",
-+    // Com muitos clientes os passos por cliente estourariam o limite do Chat: aí vira uma linha por grupo (a lista fica no app).
-+    ...(acoes.length <= 5
-+      ? [
-+        ...acoes.filter(x => x.tipo === "reativar").map(x => `Gira: criar o link de pedido de ${x.cliente} com ${int(x.quantidade)} un (${x.vendedor})`),
-+        ...acoes.filter(x => x.tipo === "incluir").map(x => `Gira: incluir ${int(x.quantidade)} un no próximo pedido de ${x.cliente} (${x.vendedor})`),
-+      ]
-+      : [
-+        ...(reativar.length ? [`Gira: criar o link de pedido dos ${reativar.length} clientes a reativar, com a quantidade de cada cartão`] : []),
-+        ...(incluir.length ? [`Gira: incluir o item no próximo pedido dos ${incluir.length} clientes ativos, com a quantidade de cada cartão`] : []),
-+      ]),
-+    "Cada vendedor manda a mensagem pelo WhatsApp com o link e confirma em até 2 horas se o cliente abriu",
-+    "Registrar o braço (A ou B) de cada link para medir qual condição aprovou mais pedidos",
-+    "Acompanhar na Torre quantos pedidos foram aprovados até o prazo",
-+  ];
-+  const orcamentoPronto = 4000 - (tituloB2B.length + motivo.length + passosB2B.join("\n").length + 330); // 330 = rótulos e cabeçalho do Chat
-+
-   // Sem histórico B2B: lote pequeno, até 30 dias de venda e no máximo 10% do estoque.
-   const loteUn = Math.max(10, Math.round(Math.min(p.venda_15d_un * 2, p.estoque_un * 0.1) / 10) * 10);
-   const precoLote = Math.max(precoMin, Math.round(p.preco_cheio_brl * 0.7 * 100) / 100);
-@@ -314,29 +385,29 @@
-     recompra.length
-       ? {
-         time: "B2B",
--        oQueFazer: [reativar.length ? `Reative ${reativar.length} cliente${reativar.length > 1 ? "s" : ""} parado${reativar.length > 1 ? "s" : ""}` : "",
--          incluir.length ? `inclua no próximo pedido de ${incluir.length} cliente${incluir.length > 1 ? "s" : ""} ativo${incluir.length > 1 ? "s" : ""}` : ""]
--          .filter(Boolean).join(" e ") + ` (${int(recompraUn)} un, ${Math.max(1, Math.round((recompraUn / p.estoque_un) * 100))}% do estoque)`,
-+        oQueFazer: tituloB2B,
-         porque: motivo,
-         ateQuando: ate,
--        pronto: `Clientes que compraram o SKU 2 ou mais vezes no último ano e passaram do intervalo habitual. ` +
--          `Reativar = não fez nenhum pedido desde então: oferecer a quantidade de sempre. Incluir no próximo pedido = segue comprando outros itens: oferecer metade, junto do pedido que já vai fazer. ` +
--          `${trocaram ? `${trocaram} cliente${trocaram > 1 ? "s" : ""} que trocaram por outro item da mesma família ficaram de fora. ` : ""}` +
--          `Condição em teste hoje, só entre clientes que pagam a prazo por boleto: metade (A) recebe até 5% abaixo do preço que já paga, no prazo de sempre, sem sair da faixa de tabela dele (padrão até 34%, intermediária até 49%; quem já está na especial, 50% ou mais, não ganha desconto extra); a outra metade (B) paga o preço de sempre com 30 dias a mais na última parcela, até 120 dias. ` +
--          `Quem paga PIX, cartão ou outra forma recebe a condição A e fica fora da comparação. ` +
--          `Preço nunca abaixo de ${brl(precoMin)} (piso provisório). Prazo extra só para quem está com o crédito em dia na Torre; com título vencido, a condição vira pagamento à vista no preço do braço A. ` +
--          `Estas condições são uma proposta de alçada: precisam do ok do gestor comercial antes do envio. Validade de 7 dias.\n\n` +
--          porVendedor.map(x => x.texto).join("\n\n"),
--        executar: { canal: "Gira, na Torre B2B", passos: [
--          "Pegar o ok do gestor comercial para as condições A e B",
--          "Conferir o crédito de cada cliente na Torre antes de oferecer o prazo do braço B",
--          "Clientes a reativar: criar no Gira o link de pedido pronto com a quantidade de sempre",
--          "Clientes ativos: incluir o item no próximo pedido pelo Gira, junto dos itens que ele já compra",
--          "Cada vendedor manda o link para o cliente pelo WhatsApp e confirma em até 2 horas se o cliente abriu",
--          "Registrar o braço (A ou B) de cada link para medir qual condição aprovou mais pedidos",
--          "Acompanhar na Torre quantos pedidos foram aprovados até o prazo",
--        ] },
-+        pronto: (() => {
-+          const resumo = `RESUMO: ${acoes.length} cliente${acoes.length > 1 ? "s" : ""} · ${reativar.length} para reativar · ${incluir.length} para incluir no próximo pedido · ${int(recompraUn)} un (${pctEstoque}% do estoque) · ${dinheiro(acoes.reduce((t, x) => t + x.valorPedido, 0))} · validade ${ate}` +
-+            (trocaram ? ` · ${trocaram} cliente${trocaram > 1 ? "s" : ""} fora (trocaram por outro item da mesma família)` : "");
-+          const regras = `REGRAS DESTA AÇÃO (precisam do ok do gestor comercial antes do envio)\n` +
-+            `- Teste só entre quem paga boleto a prazo: A = até 5% abaixo do preço que já paga, no prazo de sempre; B = preço de sempre com 30 dias a mais na última parcela (até 120 dias). PIX, cartão e outros recebem A e ficam fora da comparação.\n` +
-+            `- O desconto nunca tira o cliente da faixa de tabela dele (padrão até 34%, intermediária até 49%; especial sem desconto extra).\n` +
-+            `- Preço nunca abaixo de ${brl(precoMin)} (piso provisório). Prazo extra só com crédito em dia na Torre; com título vencido, vira à vista no preço do braço A.`;
-+          // O resumo mostra os primeiros clientes que cabem; o resto fica no app (cartões com contato e e-mail pronto).
-+          let corpo = ""; let mostrados = 0;
-+          for (const x of acoes) {
-+            const b = `${mostrados ? "\n\n" : ""}${blocoCliente(x, mostrados + 1)}`;
-+            if ((resumo + regras + corpo + b).length + 60 > orcamentoPronto && mostrados > 0) break;
-+            corpo += b; mostrados++;
-+          }
-+          const resto = acoes.length - mostrados;
-+          return `${resumo}\n\nCLIENTES\n${corpo}${resto ? `\n\n+${resto} cliente${resto > 1 ? "s" : ""} no app, com contato e e-mail pronto.` : ""}\n\n${regras}`;
-+        })(),
-+        executar: { canal: "Gira, na Torre B2B", passos: passosB2B },
-         porVendedor,
-+        acoes,
-       }
-       : todos.length
-       ? {
-diff -ruN v12-original/src/contatos.ts app/src/contatos.ts
---- v12-original/src/contatos.ts	1970-01-01 00:00:00.000000000 +0000
-+++ app/src/contatos.ts	2026-10-15 17:21:02.280515140 +0000
-@@ -0,0 +1,86 @@
-+// Contato dos clientes B2B, lido ao vivo do Data Mart (pedidos de atacado do Tiny), pelo login de quem usa o app.
-+// O agente só recebe da Torre nome, cidade, UF e vendedor; telefone e e-mail não vêm de lá. O Tiny cobre só parte dos clientes,
-+// então o contato é "melhor esforço": quando não acha, o cartão diz o motivo e manda abrir o cliente na Torre. Nunca inventa contato.
-+// Nada de telefone ou e-mail fica no código ou no banco do app: só passa por aqui na hora, para quem tem acesso ao Data Mart.
-+import type { ContatoCliente } from "./agente";
-+
-+export const TABELAS_TINY = [
-+  "tiny_pedidos_apice_atacado_sp",
-+  "tiny_pedidos_apice_cosmetics_atacado_es",
-+  "tiny_pedidos_apice_cosmetics_atacado_rj",
-+  "tiny_pedidos_ap_cosmetics_es",
-+  "tiny_pedidos_ap_cosmetics_rj",
-+  "tiny_pedidos_ap_cosmetics_sp",
-+];
-+
-+export type LinhaTiny = {
-+  nome_cliente?: string | null; fone_cliente?: string | null; email_cliente?: string | null;
-+  cpf_cnpj_cliente?: string | null; data_pedido?: string | null;
-+};
-+export type Resultado = { contato: ContatoCliente | null; motivo?: string };
-+export type Consulta = (tabela: string, query: string) => Promise<LinhaTiny[]>;
-+// Falta de login ou de permissão no Data Mart: aparece como erro claro, nunca como "cliente não encontrado".
-+export class ErroAcesso extends Error {}
-+
-+export const norm = (t: string) =>
-+  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-+
-+// Padrão ilike para o PostgREST: até 3 palavras do nome, com vogais e "c" trocados por "_" para não depender de acento
-+// (o agente guarda o nome sem acento; o Tiny guarda com). O nome exato é conferido depois, em norm().
-+export function padraoIlike(nome: string): string {
-+  const palavras = norm(nome).split(" ").filter(Boolean);
-+  const boas = palavras.filter(p => p.length >= 3);
-+  const usar = (boas.length ? boas : palavras).slice(0, 3);
-+  return "*" + usar.map(p => p.replace(/[aeiouc]/g, "_")).join("*") + "*";
-+}
-+
-+export const queryTiny = (nome: string) =>
-+  `select=nome_cliente,fone_cliente,email_cliente,cpf_cnpj_cliente,data_pedido&nome_cliente=ilike.${encodeURIComponent(padraoIlike(nome))}&order=data_pedido.desc&limit=30`;
-+
-+const limpar = (v?: string | null) => { const t = (v ?? "").trim(); return t || undefined; };
-+const dataBr = (d?: string | null) => { const m = String(d ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; };
-+
-+export function escolherContato(alvo: string, linhas: LinhaTiny[]): Resultado {
-+  const alvoN = norm(alvo);
-+  const exatas = linhas.filter(l => norm(l.nome_cliente ?? "") === alvoN);
-+  if (!exatas.length) return { contato: null, motivo: "não encontrado nos pedidos do Tiny" };
-+  const docs = new Set(exatas.map(l => (l.cpf_cnpj_cliente ?? "").replace(/\D/g, "")).filter(Boolean));
-+  if (docs.size > 1) return { contato: null, motivo: "há mais de um cadastro com esse nome no Tiny: confirme na Torre qual é o cliente" };
-+  const recentes = [...exatas].sort((a, b) => String(b.data_pedido ?? "").localeCompare(String(a.data_pedido ?? "")));
-+  const com = recentes.find(l => limpar(l.fone_cliente) || limpar(l.email_cliente));
-+  if (!com) return { contato: null, motivo: "cadastro no Tiny sem telefone nem e-mail" };
-+  return {
-+    contato: {
-+      telefone: limpar(com.fone_cliente),
-+      email: limpar(com.email_cliente)?.toLowerCase(),
-+      fonte: `Tiny, pedido de ${dataBr(com.data_pedido)}`,
-+    },
-+  };
-+}
-+
-+const cache = new Map<string, { t: number; v: Resultado }>();
-+const TTL_MS = 10 * 60 * 1000;
-+export const MAX_CLIENTES = 12;
-+
-+export async function buscarContatos(consulta: Consulta, nomes: string[]): Promise<{ resultados: Record<string, Resultado>; falhas: number }> {
-+  const unicos = [...new Set(nomes)];
-+  const resultados: Record<string, Resultado> = {};
-+  let falhas = 0;
-+  await Promise.all(unicos.map(async (nome, i) => {
-+    if (i >= MAX_CLIENTES) { resultados[nome] = { contato: null, motivo: `não consultado (limite de ${MAX_CLIENTES} clientes por vez)` }; return; }
-+    const chave = norm(nome), hit = cache.get(chave);
-+    if (hit && Date.now() - hit.t < TTL_MS) { resultados[nome] = hit.v; return; }
-+    const q = queryTiny(nome);
-+    let falhou = false;
-+    const lotes = await Promise.all(TABELAS_TINY.map(t => consulta(t, q).catch(e => {
-+      if (e instanceof ErroAcesso) throw e;
-+      falhas++; falhou = true; return [] as LinhaTiny[];
-+    })));
-+    const r = escolherContato(nome, lotes.flat());
-+    if (!falhou) cache.set(chave, { t: Date.now(), v: r }); // resposta incompleta não fica em cache
-+    resultados[nome] = falhou && !r.contato ? { contato: null, motivo: "consulta ao Tiny falhou em alguma tabela: tente de novo" } : r;
-+  }));
-+  return { resultados, falhas };
-+}
-+
-+export const limparCacheContatos = () => cache.clear();
-diff -ruN v12-original/src/worker.ts app/src/worker.ts
---- v12-original/src/worker.ts	2026-10-15 17:16:00.762503952 +0000
-+++ app/src/worker.ts	2026-10-15 17:21:02.281177317 +0000
-@@ -1,142 +1,172 @@
--// Agente de Estoque Parado: API do agente no GoDeploy.
--// GET  /api/radar            radar com parados, entrando em slow moving e a ação de cada time
--// POST /api/produtos         cadastra um produto real para o teste (fica no env.DB)
--// POST /api/enviar           envia as mensagens escolhidas para o Google Chat (env.CHAT_WEBHOOK_URL)
--// POST /api/ia               reescreve os textos de Growth com o AI Proxy (env.AI_PROXY_KEY), se configurado
--// GET  /api/status           o que está configurado
--import { DATA } from "./data";
--import { REAIS_GOCASE, REAIS_INFO, REAIS_GOBEAUTE, REAIS_GOBEAUTE_INFO, REAIS_GOBEAUTE_B2C, REAIS_GOBEAUTE_B2C_INFO } from "./reais";
--import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
--
--type Env = {
--  DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
--  CHAT_WEBHOOK_URL?: string;
--  AI_PROXY_KEY?: string;
--  AI_MODEL?: string;
--};
--
--const json = (body: unknown, status = 200) =>
--  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
--
--async function setup(env: Env) {
--  await env.DB.exec(
--    `CREATE TABLE IF NOT EXISTS produtos_reais (sku TEXT PRIMARY KEY, dados TEXT NOT NULL, criado_por TEXT, criado_em TEXT DEFAULT (datetime('now')))`, []);
--  await env.DB.exec(
--    `CREATE TABLE IF NOT EXISTS envios (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT, time TEXT, ok INTEGER, enviado_por TEXT, enviado_em TEXT DEFAULT (datetime('now')))`, []);
--}
--
--// fonte "ficticia": base do hackathon com clientes fictícios. fonte "real": dados reais da Gocase, sem clientes.
--// Sem fonte (envio e IA): as duas juntas, para achar qualquer SKU.
--async function base(env: Env, fonte?: string): Promise<Base> {
--  const r = await env.DB.query(`SELECT dados FROM produtos_reais ORDER BY criado_em DESC`, []);
--  const cadastrados = r.rows.map(x => JSON.parse(String(x.dados)) as Produto);
--  const ficticios = DATA.produtos as unknown as Produto[];
--  if (fonte === "real") return { produtos: [...cadastrados, ...REAIS_GOCASE], clientes: [], pedidos: [] };
--  if (fonte === "gobeaute") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE], clientes: [], pedidos: [] };
--  if (fonte === "b2c") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE_B2C], clientes: [], pedidos: [] };
--  const produtos = fonte === "ficticia" ? [...cadastrados, ...ficticios] : [...cadastrados, ...REAIS_GOCASE, ...REAIS_GOBEAUTE, ...REAIS_GOBEAUTE_B2C, ...ficticios];
--  return { produtos, clientes: DATA.clientes as never, pedidos: DATA.pedidos as never };
--}
--
--function num(v: unknown): number {
--  const t = String(v ?? "").trim();
--  if (!t) return NaN;
--  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
--  return Number.isFinite(n) ? n : NaN;
--}
--
--async function reescreverComIA(env: Env, a: ReturnType<typeof analisar>) {
--  const growth = a.mensagens.find(m => m.time === "Growth")!;
--  const prompt = `Você escreve campanhas da Gocase: tom jovem, curto e direto. Reescreva os três textos abaixo (WhatsApp, e-mail com assunto, SMS de até 140 caracteres) para vender este produto. Mantenha exatamente preços, percentuais e datas. Responda só com JSON no formato {"whatsapp":"...","email":"...","sms":"..."}.\n\nProduto: ${a.produto}\nMotivo: ${a.motivo}\n\n${growth.pronto}`;
--  const res = await fetch("https://ai-proxy.gogroupbr.com/v1/messages", {
--    method: "POST",
--    headers: { Authorization: `Bearer ${env.AI_PROXY_KEY}`, "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
--    body: JSON.stringify({ model: env.AI_MODEL || "claude-sonnet-5-5", max_tokens: 700, messages: [{ role: "user", content: prompt }] }),
--  });
--  const body = await res.json() as { content?: { type: string; text?: string }[]; error?: { message?: string } };
--  if (!res.ok) throw new Error(body.error?.message || `AI Proxy respondeu ${res.status}`);
--  const texto = (body.content ?? []).map(c => c.text ?? "").join("");
--  const m = texto.match(/\{[\s\S]*\}/);
--  if (!m) throw new Error("A IA não devolveu JSON");
--  return JSON.parse(m[0]) as { whatsapp: string; email: string; sms: string };
--}
--
--export default {
--  async fetch(request: Request, env: Env): Promise<Response> {
--    const url = new URL(request.url);
--    const quem = request.headers.get("x-godeploy-user-email") ?? "anônimo";
--    try {
--      await setup(env);
--
--      if (url.pathname === "/api/status") {
--        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, usuario: quem });
--      }
--
--      if (url.pathname === "/api/radar" && request.method === "GET") {
--        const t0 = Date.now();
--        const pedida = url.searchParams.get("fonte");
--        const fonte = pedida === "real" || pedida === "gobeaute" || pedida === "b2c" ? pedida : "ficticia";
--        const r = radar(await base(env, fonte));
--        return json({ ...r, fonte, info: fonte === "real" ? REAIS_INFO : fonte === "gobeaute" ? REAIS_GOBEAUTE_INFO : fonte === "b2c" ? REAIS_GOBEAUTE_B2C_INFO : "Base fictícia do hackathon.", ms: Date.now() - t0 });
--      }
--
--      if (url.pathname === "/api/produtos" && request.method === "POST") {
--        const b = await request.json() as Record<string, unknown>;
--        const p: Produto = {
--          sku: "REAL-" + String(b.produto ?? "").normalize("NFD").replace(/[^\w]+/g, "-").toUpperCase().slice(0, 30),
--          produto: String(b.produto ?? "").trim(),
--          categoria: String(b.categoria ?? "Copos e garrafas"),
--          status: "real",
--          estoque_un: num(b.estoque_un), custo_unit_brl: num(b.custo_unit_brl), preco_cheio_brl: num(b.preco_cheio_brl),
--          venda_15d_un: num(b.venda_15d_un), venda_15d_anteriores_un: num(b.venda_15d_anteriores_un),
--        };
--        const positivos = ["estoque_un", "custo_unit_brl", "preco_cheio_brl"];
--        const faltando = Object.entries(p)
--          .filter(([k, v]) => v === "" || (typeof v === "number" && !(positivos.includes(k) ? v > 0 : v >= 0)))
--          .map(([k]) => k);
--        if (faltando.length) return json({ erro: `Preencha: ${faltando.join(", ")}` }, 400);
--        await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
--        return json({ ok: true, analise: analisar(p, await base(env)) });
--      }
--
--      if (url.pathname === "/api/produtos" && request.method === "DELETE") {
--        const sku = url.searchParams.get("sku") ?? "";
--        await env.DB.exec(`DELETE FROM produtos_reais WHERE sku = ?`, [sku]);
--        return json({ ok: true });
--      }
--
--      if (url.pathname === "/api/enviar" && request.method === "POST") {
--        const { sku, times } = await request.json() as { sku: string; times: string[] };
--        if (!env.CHAT_WEBHOOK_URL) return json({ erro: "O webhook do Google Chat ainda não foi configurado. Use Copiar por enquanto." }, 400);
--        const bs = await base(env);
--        const p = bs.produtos.find(x => x.sku === sku);
--        if (!p) return json({ erro: "Produto não encontrado" }, 404);
--        const a = analisar(p, bs);
--        const enviados: { time: string; ok: boolean }[] = [];
--        for (const m of a.mensagens.filter(m => times.includes(m.time))) {
--          const r = await fetch(env.CHAT_WEBHOOK_URL, {
--            method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" },
--            body: JSON.stringify({ text: textoChat(a, m) }),
--          });
--          enviados.push({ time: m.time, ok: r.ok });
--          await env.DB.exec(`INSERT INTO envios (sku, time, ok, enviado_por) VALUES (?, ?, ?, ?)`, [sku, m.time, r.ok ? 1 : 0, quem]);
--        }
--        return json({ enviados });
--      }
--
--      if (url.pathname === "/api/ia" && request.method === "POST") {
--        if (!env.AI_PROXY_KEY) return json({ erro: "A chave do AI Proxy ainda não foi configurada. Os textos do agente continuam valendo." }, 400);
--        const { sku } = await request.json() as { sku: string };
--        const bs = await base(env);
--        const p = bs.produtos.find(x => x.sku === sku);
--        if (!p) return json({ erro: "Produto não encontrado" }, 404);
--        return json(await reescreverComIA(env, analisar(p, bs)));
--      }
--
--      return json({ erro: "Rota não encontrada" }, 404);
--    } catch (e) {
--      console.log("erro", (e as Error).message);
--      return json({ erro: (e as Error).message }, 500);
--    }
--  },
--};
-+// Agente de Estoque Parado: API do agente no GoDeploy.
-+// GET  /api/radar            radar com parados, entrando em slow moving e a ação de cada time
-+// POST /api/produtos         cadastra um produto real para o teste (fica no env.DB)
-+// POST /api/enviar           envia as mensagens escolhidas para o Google Chat (env.CHAT_WEBHOOK_URL)
-+// POST /api/ia               reescreve os textos de Growth com o AI Proxy (env.AI_PROXY_KEY), se configurado
-+// GET  /api/b2b/contatos     contato dos clientes B2B de um produto, ao vivo do Data Mart (Tiny)
-+// GET  /api/status           o que está configurado
-+import { DATA } from "./data";
-+import { REAIS_GOCASE, REAIS_INFO, REAIS_GOBEAUTE, REAIS_GOBEAUTE_INFO, REAIS_GOBEAUTE_B2C, REAIS_GOBEAUTE_B2C_INFO } from "./reais";
-+import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
-+import { buscarContatos, ErroAcesso, type LinhaTiny } from "./contatos";
-+
-+type Env = {
-+  DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
-+  CHAT_WEBHOOK_URL?: string;
-+  AI_PROXY_KEY?: string;
-+  AI_MODEL?: string;
-+  PROXY_BASE_URL?: string; // proxy de dados do GoDeploy (Data Mart, somente leitura)
-+};
-+
-+const json = (body: unknown, status = 200) =>
-+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
-+
-+async function setup(env: Env) {
-+  await env.DB.exec(
-+    `CREATE TABLE IF NOT EXISTS produtos_reais (sku TEXT PRIMARY KEY, dados TEXT NOT NULL, criado_por TEXT, criado_em TEXT DEFAULT (datetime('now')))`, []);
-+  await env.DB.exec(
-+    `CREATE TABLE IF NOT EXISTS envios (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT, time TEXT, ok INTEGER, enviado_por TEXT, enviado_em TEXT DEFAULT (datetime('now')))`, []);
-+}
-+
-+// fonte "ficticia": base do hackathon com clientes fictícios. fonte "real": dados reais da Gocase, sem clientes.
-+// Sem fonte (envio e IA): as duas juntas, para achar qualquer SKU.
-+async function base(env: Env, fonte?: string): Promise<Base> {
-+  const r = await env.DB.query(`SELECT dados FROM produtos_reais ORDER BY criado_em DESC`, []);
-+  const cadastrados = r.rows.map(x => JSON.parse(String(x.dados)) as Produto);
-+  const ficticios = DATA.produtos as unknown as Produto[];
-+  if (fonte === "real") return { produtos: [...cadastrados, ...REAIS_GOCASE], clientes: [], pedidos: [] };
-+  if (fonte === "gobeaute") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE], clientes: [], pedidos: [] };
-+  if (fonte === "b2c") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE_B2C], clientes: [], pedidos: [] };
-+  const produtos = fonte === "ficticia" ? [...cadastrados, ...ficticios] : [...cadastrados, ...REAIS_GOCASE, ...REAIS_GOBEAUTE, ...REAIS_GOBEAUTE_B2C, ...ficticios];
-+  return { produtos, clientes: DATA.clientes as never, pedidos: DATA.pedidos as never };
-+}
-+
-+function num(v: unknown): number {
-+  const t = String(v ?? "").trim();
-+  if (!t) return NaN;
-+  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
-+  return Number.isFinite(n) ? n : NaN;
-+}
-+
-+// Leitura do Data Mart pelo proxy do GoDeploy, com o login de quem usa o app (a permissão é dele, não do app).
-+async function pg(env: Env, request: Request, tabela: string, query: string): Promise<LinhaTiny[]> {
-+  if (!env.PROXY_BASE_URL) throw new ErroAcesso("Proxy de dados não configurado neste ambiente.");
-+  const r = await fetch(`${env.PROXY_BASE_URL}/datamart/api.${tabela}?${query}`, { headers: { Cookie: request.headers.get("Cookie") ?? "" } });
-+  if (r.status === 401) throw new ErroAcesso("Sem login para o Data Mart. Abra o app logado.");
-+  if (r.status === 403) throw new ErroAcesso("Você não tem permissão de leitura no Data Mart. Peça o acesso no console do GoDeploy.");
-+  if (!r.ok) throw new Error(`Data Mart respondeu ${r.status}`);
-+  return await r.json() as LinhaTiny[];
-+}
-+
-+async function reescreverComIA(env: Env, a: ReturnType<typeof analisar>) {
-+  const growth = a.mensagens.find(m => m.time === "Growth")!;
-+  const prompt = `Você escreve campanhas da Gocase: tom jovem, curto e direto. Reescreva os três textos abaixo (WhatsApp, e-mail com assunto, SMS de até 140 caracteres) para vender este produto. Mantenha exatamente preços, percentuais e datas. Responda só com JSON no formato {"whatsapp":"...","email":"...","sms":"..."}.\n\nProduto: ${a.produto}\nMotivo: ${a.motivo}\n\n${growth.pronto}`;
-+  const res = await fetch("https://ai-proxy.gogroupbr.com/v1/messages", {
-+    method: "POST",
-+    headers: { Authorization: `Bearer ${env.AI_PROXY_KEY}`, "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
-+    body: JSON.stringify({ model: env.AI_MODEL || "claude-sonnet-5-5", max_tokens: 700, messages: [{ role: "user", content: prompt }] }),
-+  });
-+  const body = await res.json() as { content?: { type: string; text?: string }[]; error?: { message?: string } };
-+  if (!res.ok) throw new Error(body.error?.message || `AI Proxy respondeu ${res.status}`);
-+  const texto = (body.content ?? []).map(c => c.text ?? "").join("");
-+  const m = texto.match(/\{[\s\S]*\}/);
-+  if (!m) throw new Error("A IA não devolveu JSON");
-+  return JSON.parse(m[0]) as { whatsapp: string; email: string; sms: string };
-+}
-+
-+export default {
-+  async fetch(request: Request, env: Env): Promise<Response> {
-+    const url = new URL(request.url);
-+    const quem = request.headers.get("x-godeploy-user-email") ?? "anônimo";
-+    try {
-+      await setup(env);
-+
-+      if (url.pathname === "/api/status") {
-+        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, datamart: !!env.PROXY_BASE_URL, usuario: quem });
-+      }
-+
-+      if (url.pathname === "/api/radar" && request.method === "GET") {
-+        const t0 = Date.now();
-+        const pedida = url.searchParams.get("fonte");
-+        const fonte = pedida === "real" || pedida === "gobeaute" || pedida === "b2c" ? pedida : "ficticia";
-+        const r = radar(await base(env, fonte));
-+        return json({ ...r, fonte, info: fonte === "real" ? REAIS_INFO : fonte === "gobeaute" ? REAIS_GOBEAUTE_INFO : fonte === "b2c" ? REAIS_GOBEAUTE_B2C_INFO : "Base fictícia do hackathon.", ms: Date.now() - t0 });
-+      }
-+
-+      if (url.pathname === "/api/b2b/contatos" && request.method === "GET") {
-+        const sku = url.searchParams.get("sku") ?? "";
-+        const bs = await base(env);
-+        const p = bs.produtos.find(x => x.sku === sku);
-+        if (!p) return json({ erro: "Produto não encontrado" }, 404);
-+        const acoes = analisar(p, bs).mensagens.find(m => m.time === "B2B")?.acoes ?? [];
-+        try {
-+          const { resultados, falhas } = await buscarContatos((t, q) => pg(env, request, t, q), acoes.map(a => a.cliente));
-+          const achou = Object.values(resultados).filter(r => r.contato).length;
-+          return json({ contatos: resultados, resumo: { clientes: Object.keys(resultados).length, com_contato: achou, consultas_com_erro: falhas },
-+            fonte: "Tiny, pedidos de atacado (Data Mart). A Torre tem os demais clientes: abra pelo vendedor." });
-+        } catch (e) {
-+          if (e instanceof ErroAcesso) return json({ erro: e.message, sem_acesso: true }, 403);
-+          throw e;
-+        }
-+      }
-+
-+      if (url.pathname === "/api/produtos" && request.method === "POST") {
-+        const b = await request.json() as Record<string, unknown>;
-+        const p: Produto = {
-+          sku: "REAL-" + String(b.produto ?? "").normalize("NFD").replace(/[^\w]+/g, "-").toUpperCase().slice(0, 30),
-+          produto: String(b.produto ?? "").trim(),
-+          categoria: String(b.categoria ?? "Copos e garrafas"),
-+          status: "real",
-+          estoque_un: num(b.estoque_un), custo_unit_brl: num(b.custo_unit_brl), preco_cheio_brl: num(b.preco_cheio_brl),
-+          venda_15d_un: num(b.venda_15d_un), venda_15d_anteriores_un: num(b.venda_15d_anteriores_un),
-+        };
-+        const positivos = ["estoque_un", "custo_unit_brl", "preco_cheio_brl"];
-+        const faltando = Object.entries(p)
-+          .filter(([k, v]) => v === "" || (typeof v === "number" && !(positivos.includes(k) ? v > 0 : v >= 0)))
-+          .map(([k]) => k);
-+        if (faltando.length) return json({ erro: `Preencha: ${faltando.join(", ")}` }, 400);
-+        await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
-+        return json({ ok: true, analise: analisar(p, await base(env)) });
-+      }
-+
-+      if (url.pathname === "/api/produtos" && request.method === "DELETE") {
-+        const sku = url.searchParams.get("sku") ?? "";
-+        await env.DB.exec(`DELETE FROM produtos_reais WHERE sku = ?`, [sku]);
-+        return json({ ok: true });
-+      }
-+
-+      if (url.pathname === "/api/enviar" && request.method === "POST") {
-+        const { sku, times } = await request.json() as { sku: string; times: string[] };
-+        if (!env.CHAT_WEBHOOK_URL) return json({ erro: "O webhook do Google Chat ainda não foi configurado. Use Copiar por enquanto." }, 400);
-+        const bs = await base(env);
-+        const p = bs.produtos.find(x => x.sku === sku);
-+        if (!p) return json({ erro: "Produto não encontrado" }, 404);
-+        const a = analisar(p, bs);
-+        const enviados: { time: string; ok: boolean }[] = [];
-+        for (const m of a.mensagens.filter(m => times.includes(m.time))) {
-+          const r = await fetch(env.CHAT_WEBHOOK_URL, {
-+            method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" },
-+            body: JSON.stringify({ text: textoChat(a, m) }),
-+          });
-+          enviados.push({ time: m.time, ok: r.ok });
-+          await env.DB.exec(`INSERT INTO envios (sku, time, ok, enviado_por) VALUES (?, ?, ?, ?)`, [sku, m.time, r.ok ? 1 : 0, quem]);
-+        }
-+        return json({ enviados });
-+      }
-+
-+      if (url.pathname === "/api/ia" && request.method === "POST") {
-+        if (!env.AI_PROXY_KEY) return json({ erro: "A chave do AI Proxy ainda não foi configurada. Os textos do agente continuam valendo." }, 400);
-+        const { sku } = await request.json() as { sku: string };
-+        const bs = await base(env);
-+        const p = bs.produtos.find(x => x.sku === sku);
-+        if (!p) return json({ erro: "Produto não encontrado" }, 404);
-+        return json(await reescreverComIA(env, analisar(p, bs)));
-+      }
-+
-+      return json({ erro: "Rota não encontrada" }, 404);
-+    } catch (e) {
-+      console.log("erro", (e as Error).message);
-+      return json({ erro: (e as Error).message }, 500);
-+    }
-+  },
-+};
+diff -ruN -x contatos_torre.ts v12-original/index.html app/index.html
 --- v12-original/index.html	2026-10-15 17:16:00.762562831 +0000
-+++ app/index.html	2026-10-15 17:24:35.720971269 +0000
++++ app/index.html	2026-10-15 17:32:47.437130769 +0000
 @@ -1,322 +1,405 @@
 -<!doctype html>
 -<html lang="pt-BR">
@@ -1176,7 +603,7 @@ diff -ruN v12-original/src/worker.ts app/src/worker.ts
 +    x.contato = c || null;
 +    if (c) {
 +      el.className = "ct";
-+      el.innerHTML = `<b>Contato:</b> ${esc([c.telefone, c.email].filter(Boolean).join(" · "))} <span class="meta">(${esc(c.fonte)}; confirme antes de enviar)</span>`;
++      el.innerHTML = `<b>Contato:</b> ${esc([c.telefone, c.email].filter(Boolean).join(" · "))} <span class="meta">(${esc(c.fonte)}; confirme antes de enviar)</span>${c.aviso ? ` <span class="meta">Atenção: ${esc(c.aviso)}.</span>` : ""}`;
 +      const d = (c.telefone || "").replace(/\D/g, "");
 +      const wa = d.length === 10 || d.length === 11 ? "55" + d : d.length >= 12 && d.startsWith("55") ? d : "";
 +      const a = $(`#wa-${i}-${j}`);
@@ -1302,3 +729,593 @@ diff -ruN v12-original/src/worker.ts app/src/worker.ts
 +</script>
 +</body>
 +</html>
+diff -ruN -x contatos_torre.ts v12-original/src/agente.ts app/src/agente.ts
+--- v12-original/src/agente.ts	2026-10-15 17:16:00.761596677 +0000
++++ app/src/agente.ts	2026-10-15 17:32:47.435683603 +0000
+@@ -40,6 +40,19 @@
+ 
+ export type Classe = "parado" | "em_risco" | "saudavel" | "campeao";
+ 
++// Cartão de ação B2B: tudo que o vendedor precisa para agir em um cliente, sem ler texto corrido.
++export type ContatoCliente = { telefone?: string; email?: string; fonte: string; aviso?: string };
++export type AcaoCliente = {
++  tipo: "reativar" | "incluir";
++  cliente: string; cidade: string; uf: string; vendedor: string;
++  situacao: string; // por que este cliente foi escolhido
++  quantidade: number; precoUn: number; valorPedido: number;
++  condicao: string; braco: string; faixa: string; validade: string;
++  aviso?: string; // crédito
++  contato: ContatoCliente | null; // o worker preenche pelo Data Mart (Tiny); null = não achou
++  whatsapp: string; emailAssunto: string; emailCorpo: string;
++};
++
+ export type Mensagem = {
+   time: string;
+   oQueFazer: string;
+@@ -48,6 +61,7 @@
+   pronto: string;
+   executar: { canal: string; passos: string[] }; // como colocar a ação no ar logo depois da análise
+   porVendedor?: { vendedor: string; clientes: number; unidades: number; texto: string }[]; // B2B: mensagem pronta por vendedor
++  acoes?: AcaoCliente[]; // B2B: um cartão por cliente, com contato e mensagens prontas
+ };
+ 
+ export type Analise = {
+@@ -203,19 +217,76 @@
+     return v > 30000 ? ` Pedido de ${brl(v)} passa do teto da classe A (R$ 30 mil): dividir ou pagar parte à vista.`
+       : v > 5000 ? ` Pedido de ${brl(v)}: a prazo só para classe ${v > 20000 ? "A" : "A ou B"} na Torre.` : "";
+   };
++  const primeiro = (n: string) => n.split(" ")[0];
++  const nomeMarca = p.marca ?? "Gobeauté";
++  const dinheiro = (v: number) => brl(Math.round(v * 100) / 100);
++  const acoes: AcaoCliente[] = recompra.map(r => {
++    const c = condicao(r), qtd = qtdSugerida(r), reat = r.situacao === "parado";
++    const whatsapp = reat
++      ? `Oi, tudo bem? Aqui é ${primeiro(r.vendedor)}, da ${nomeMarca}. Olhei o histórico da ${r.cliente} e vi que vocês repunham ${p.produto} a cada ~${r.intervalo} dias (média de ${int(r.qtd_media)} un), mas o último pedido desse item foi há ${r.dias_sem} dias. Por isso deixei uma condição pronta para repor: ${int(qtd)} un a ${c.texto}, válida até ${ate}. Posso montar o pedido e te mandar o link para aprovar?`
++      : `Oi, tudo bem? Aqui é ${primeiro(r.vendedor)}, da ${nomeMarca}. Vi que a ${r.cliente} segue comprando com a gente, mas não pede ${p.produto} há ${r.dias_sem} dias (vocês costumavam pedir a cada ~${r.intervalo}). No seu próximo pedido posso incluir ${int(qtd)} un a ${c.texto}, válida até ${ate}. Quer que eu já deixe no pedido?`;
++    const emailAssunto = reat ? `${p.produto}: condição para repor o estoque da ${r.cliente}` : `${p.produto}: condição para incluir no seu próximo pedido`;
++    const emailCorpo = reat
++      ? `Olá!\n\nOlhando o histórico da ${r.cliente}, vimos que vocês repunham ${p.produto} a cada ~${r.intervalo} dias (média de ${int(r.qtd_media)} un) e o último pedido desse item foi há ${r.dias_sem} dias.\n\nPor isso preparamos uma condição para repor: ${int(qtd)} un a ${c.texto}, válida até ${ate}.\n\nSe fizer sentido, respondo este e-mail com o link do pedido pronto para aprovação.\n\nAbraço,\n${r.vendedor}\n${nomeMarca}`
++      : `Olá!\n\nVimos que a ${r.cliente} segue comprando com a gente, mas não pede ${p.produto} há ${r.dias_sem} dias (costumava pedir a cada ~${r.intervalo}).\n\nNo seu próximo pedido podemos incluir ${int(qtd)} un a ${c.texto}, válida até ${ate}.\n\nSe quiser, deixo o item já incluído no pedido.\n\nAbraço,\n${r.vendedor}\n${nomeMarca}`;
++    return {
++      tipo: reat ? "reativar" : "incluir",
++      cliente: r.cliente, cidade: r.cidade, uf: r.uf, vendedor: r.vendedor,
++      situacao: reat
++        ? `Parado: nenhum pedido deste item há ${r.dias_sem} dias (comprava ~${int(r.qtd_media)} un a cada ${r.intervalo} dias, ${r.pedidos} pedidos no último ano) e sem pedido de nada desde então.`
++        : `Ativo: segue comprando outros itens, mas não pede este há ${r.dias_sem} dias (costumava a cada ${r.intervalo}). Oferecer metade da quantidade de sempre, junto do próximo pedido.`,
++      quantidade: qtd, precoUn: c.preco, valorPedido: Math.round(qtd * c.preco * 100) / 100,
++      condicao: c.texto, braco: braco(r), faixa: faixa(r).nome, validade: ate,
++      aviso: avisoCredito(r).trim() || undefined,
++      contato: null,
++      whatsapp, emailAssunto, emailCorpo,
++    } as AcaoCliente;
++  });
+   const vendedores = [...new Set(recompra.map(r => r.vendedor))];
++  // Bloco legível de um cliente (usado no resumo, no Chat e na mensagem por vendedor).
++  const blocoCliente = (x: AcaoCliente, n: number, comEmail = false) =>
++    `${n}) ${x.tipo === "reativar" ? "REATIVAR" : "INCLUIR NO PRÓXIMO PEDIDO"}: ${x.cliente} (${x.cidade}/${x.uf})\n` +
++    `   Situação: ${x.situacao}\n` +
++    `   Oferta: ${int(x.quantidade)} un a ${dinheiro(x.precoUn)} = ${dinheiro(x.valorPedido)}. ${x.condicao}. Teste ${x.braco}, tabela ${x.faixa}. Validade ${x.validade}.\n` +
++    (x.aviso ? `   Atenção: ${x.aviso}\n` : "") +
++    `   Contato: ${x.contato ? [x.contato.telefone, x.contato.email].filter(Boolean).join(" · ") + ` (${x.contato.fonte})` : `buscar no app ou na Torre, conta de ${x.vendedor}`}\n` +
++    `   WhatsApp: "${x.whatsapp}"` +
++    (comEmail ? `\n   E-mail, assunto: ${x.emailAssunto}\n   ${x.emailCorpo.split("\n").join("\n   ")}` : "");
+   const porVendedor = vendedores.map(vend => {
+-    const lista = recompra.filter(r => r.vendedor === vend);
+-    const linhas = lista.map(r => r.situacao === "parado"
+-      ? `- REATIVAR [teste ${braco(r)}, tabela ${faixa(r).nome}] ${r.cliente} (${r.cidade}/${r.uf}): comprava cerca de ${int(r.qtd_media)} un a cada ${r.intervalo} dias, não pede este há ${r.dias_sem} dias e a conta está sem pedido há mais tempo que o normal dela. ` +
+-        `Mensagem: "Oi! Faz tempo que não falamos. Separei ${int(qtdSugerida(r))} un de ${p.produto} a ${condicao(r).texto}, condição até ${ate}. Posso montar o pedido?"${avisoCredito(r)}`
+-      : `- INCLUIR NO PRÓXIMO PEDIDO [teste ${braco(r)}, tabela ${faixa(r).nome}] ${r.cliente} (${r.cidade}/${r.uf}): segue comprando outros itens, mas não pede este há ${r.dias_sem} dias (costumava a cada ${r.intervalo}). ` +
+-        `Mensagem: "Oi! No seu próximo pedido, posso incluir ${int(qtdSugerida(r))} un de ${p.produto} a ${condicao(r).texto}? Condição até ${ate}."${avisoCredito(r)}`);
++    const lista = acoes.filter(x => x.vendedor === vend);
+     return {
+-      vendedor: vend, clientes: lista.length, unidades: lista.reduce((t, r) => t + qtdSugerida(r), 0),
+-      texto: `${vend}, ${lista.length === 1 ? "este cliente" : "estes clientes"} de ${p.produto}:\n${linhas.join("\n")}`,
++      vendedor: vend, clientes: lista.length, unidades: lista.reduce((t, x) => t + x.quantidade, 0),
++      texto: `${vend}, ${lista.length === 1 ? "este cliente" : "estes clientes"} de ${p.produto}:\n\n${lista.map((x, k) => blocoCliente(x, k + 1, true)).join("\n\n")}`,
+     };
+   });
++  // B2B: título, passos e resumo. O resumo recebe só o espaço que sobra no Chat (~4 mil caracteres) depois de título e passos.
++  const nomesDe = (l: Recompra[]) => l.slice(0, 3).map(r => r.cliente).join(", ") + (l.length > 3 ? ` e mais ${l.length - 3}` : "");
++  const pctEstoque = Math.max(1, Math.round((recompraUn / p.estoque_un) * 100));
++  const tituloB2B = ((t: string) => t.charAt(0).toUpperCase() + t.slice(1))([
++    reativar.length ? `reative ${reativar.length} cliente${reativar.length > 1 ? "s" : ""} parado${reativar.length > 1 ? "s" : ""} (${nomesDe(reativar)})` : "",
++    incluir.length ? `inclua no próximo pedido de ${incluir.length} cliente${incluir.length > 1 ? "s" : ""} ativo${incluir.length > 1 ? "s" : ""} (${nomesDe(incluir)})` : ""]
++    .filter(Boolean).join(" e ")) + `: ${int(recompraUn)} un, ${pctEstoque}% do estoque`;
++  const clientesB = acoes.filter(x => x.braco === "B");
++  const passosB2B = [
++    "Pegar o ok do gestor comercial para as condições A e B",
++    `Conferir o crédito na Torre antes de oferecer o prazo do braço B${clientesB.length ? `: ${clientesB.length <= 3 ? clientesB.map(x => x.cliente).join(", ") : `${clientesB.length} clientes (lista no app)`}` : " (nenhum cliente no braço B desta ação)"}`,
++    "Abrir o cartão de cada cliente no app: contato e mensagem já estão prontos",
++    // Com muitos clientes os passos por cliente estourariam o limite do Chat: aí vira uma linha por grupo (a lista fica no app).
++    ...(acoes.length <= 5
++      ? [
++        ...acoes.filter(x => x.tipo === "reativar").map(x => `Gira: criar o link de pedido de ${x.cliente} com ${int(x.quantidade)} un (${x.vendedor})`),
++        ...acoes.filter(x => x.tipo === "incluir").map(x => `Gira: incluir ${int(x.quantidade)} un no próximo pedido de ${x.cliente} (${x.vendedor})`),
++      ]
++      : [
++        ...(reativar.length ? [`Gira: criar o link de pedido dos ${reativar.length} clientes a reativar, com a quantidade de cada cartão`] : []),
++        ...(incluir.length ? [`Gira: incluir o item no próximo pedido dos ${incluir.length} clientes ativos, com a quantidade de cada cartão`] : []),
++      ]),
++    "Cada vendedor manda a mensagem pelo WhatsApp com o link e confirma em até 2 horas se o cliente abriu",
++    "Registrar o braço (A ou B) de cada link para medir qual condição aprovou mais pedidos",
++    "Acompanhar na Torre quantos pedidos foram aprovados até o prazo",
++  ];
++  const orcamentoPronto = 4000 - (tituloB2B.length + motivo.length + passosB2B.join("\n").length + 330); // 330 = rótulos e cabeçalho do Chat
++
+   // Sem histórico B2B: lote pequeno, até 30 dias de venda e no máximo 10% do estoque.
+   const loteUn = Math.max(10, Math.round(Math.min(p.venda_15d_un * 2, p.estoque_un * 0.1) / 10) * 10);
+   const precoLote = Math.max(precoMin, Math.round(p.preco_cheio_brl * 0.7 * 100) / 100);
+@@ -314,29 +385,29 @@
+     recompra.length
+       ? {
+         time: "B2B",
+-        oQueFazer: [reativar.length ? `Reative ${reativar.length} cliente${reativar.length > 1 ? "s" : ""} parado${reativar.length > 1 ? "s" : ""}` : "",
+-          incluir.length ? `inclua no próximo pedido de ${incluir.length} cliente${incluir.length > 1 ? "s" : ""} ativo${incluir.length > 1 ? "s" : ""}` : ""]
+-          .filter(Boolean).join(" e ") + ` (${int(recompraUn)} un, ${Math.max(1, Math.round((recompraUn / p.estoque_un) * 100))}% do estoque)`,
++        oQueFazer: tituloB2B,
+         porque: motivo,
+         ateQuando: ate,
+-        pronto: `Clientes que compraram o SKU 2 ou mais vezes no último ano e passaram do intervalo habitual. ` +
+-          `Reativar = não fez nenhum pedido desde então: oferecer a quantidade de sempre. Incluir no próximo pedido = segue comprando outros itens: oferecer metade, junto do pedido que já vai fazer. ` +
+-          `${trocaram ? `${trocaram} cliente${trocaram > 1 ? "s" : ""} que trocaram por outro item da mesma família ficaram de fora. ` : ""}` +
+-          `Condição em teste hoje, só entre clientes que pagam a prazo por boleto: metade (A) recebe até 5% abaixo do preço que já paga, no prazo de sempre, sem sair da faixa de tabela dele (padrão até 34%, intermediária até 49%; quem já está na especial, 50% ou mais, não ganha desconto extra); a outra metade (B) paga o preço de sempre com 30 dias a mais na última parcela, até 120 dias. ` +
+-          `Quem paga PIX, cartão ou outra forma recebe a condição A e fica fora da comparação. ` +
+-          `Preço nunca abaixo de ${brl(precoMin)} (piso provisório). Prazo extra só para quem está com o crédito em dia na Torre; com título vencido, a condição vira pagamento à vista no preço do braço A. ` +
+-          `Estas condições são uma proposta de alçada: precisam do ok do gestor comercial antes do envio. Validade de 7 dias.\n\n` +
+-          porVendedor.map(x => x.texto).join("\n\n"),
+-        executar: { canal: "Gira, na Torre B2B", passos: [
+-          "Pegar o ok do gestor comercial para as condições A e B",
+-          "Conferir o crédito de cada cliente na Torre antes de oferecer o prazo do braço B",
+-          "Clientes a reativar: criar no Gira o link de pedido pronto com a quantidade de sempre",
+-          "Clientes ativos: incluir o item no próximo pedido pelo Gira, junto dos itens que ele já compra",
+-          "Cada vendedor manda o link para o cliente pelo WhatsApp e confirma em até 2 horas se o cliente abriu",
+-          "Registrar o braço (A ou B) de cada link para medir qual condição aprovou mais pedidos",
+-          "Acompanhar na Torre quantos pedidos foram aprovados até o prazo",
+-        ] },
++        pronto: (() => {
++          const resumo = `RESUMO: ${acoes.length} cliente${acoes.length > 1 ? "s" : ""} · ${reativar.length} para reativar · ${incluir.length} para incluir no próximo pedido · ${int(recompraUn)} un (${pctEstoque}% do estoque) · ${dinheiro(acoes.reduce((t, x) => t + x.valorPedido, 0))} · validade ${ate}` +
++            (trocaram ? ` · ${trocaram} cliente${trocaram > 1 ? "s" : ""} fora (trocaram por outro item da mesma família)` : "");
++          const regras = `REGRAS DESTA AÇÃO (precisam do ok do gestor comercial antes do envio)\n` +
++            `- Teste só entre quem paga boleto a prazo: A = até 5% abaixo do preço que já paga, no prazo de sempre; B = preço de sempre com 30 dias a mais na última parcela (até 120 dias). PIX, cartão e outros recebem A e ficam fora da comparação.\n` +
++            `- O desconto nunca tira o cliente da faixa de tabela dele (padrão até 34%, intermediária até 49%; especial sem desconto extra).\n` +
++            `- Preço nunca abaixo de ${brl(precoMin)} (piso provisório). Prazo extra só com crédito em dia na Torre; com título vencido, vira à vista no preço do braço A.`;
++          // O resumo mostra os primeiros clientes que cabem; o resto fica no app (cartões com contato e e-mail pronto).
++          let corpo = ""; let mostrados = 0;
++          for (const x of acoes) {
++            const b = `${mostrados ? "\n\n" : ""}${blocoCliente(x, mostrados + 1)}`;
++            if ((resumo + regras + corpo + b).length + 60 > orcamentoPronto && mostrados > 0) break;
++            corpo += b; mostrados++;
++          }
++          const resto = acoes.length - mostrados;
++          return `${resumo}\n\nCLIENTES\n${corpo}${resto ? `\n\n+${resto} cliente${resto > 1 ? "s" : ""} no app, com contato e e-mail pronto.` : ""}\n\n${regras}`;
++        })(),
++        executar: { canal: "Gira, na Torre B2B", passos: passosB2B },
+         porVendedor,
++        acoes,
+       }
+       : todos.length
+       ? {
+diff -ruN -x contatos_torre.ts v12-original/src/contatos.ts app/src/contatos.ts
+--- v12-original/src/contatos.ts	1970-01-01 00:00:00.000000000 +0000
++++ app/src/contatos.ts	2026-10-15 17:32:47.436290622 +0000
+@@ -0,0 +1,97 @@
++// Contato dos clientes B2B, lido ao vivo do Data Mart (pedidos de atacado do Tiny), pelo login de quem usa o app.
++// O agente só recebe da Torre nome, cidade, UF e vendedor; telefone e e-mail não vêm de lá. O Tiny cobre só parte dos clientes,
++// então o contato é "melhor esforço": quando não acha, o cartão diz o motivo e manda abrir o cliente na Torre. Nunca inventa contato.
++// Nada de telefone ou e-mail fica no código ou no banco do app: só passa por aqui na hora, para quem tem acesso ao Data Mart.
++import type { ContatoCliente } from "./agente";
++import { TORRE, TORRE_GERADO_EM } from "./contatos_torre";
++
++export const TABELAS_TINY = [
++  "tiny_pedidos_apice_atacado_sp",
++  "tiny_pedidos_apice_cosmetics_atacado_es",
++  "tiny_pedidos_apice_cosmetics_atacado_rj",
++  "tiny_pedidos_ap_cosmetics_es",
++  "tiny_pedidos_ap_cosmetics_rj",
++  "tiny_pedidos_ap_cosmetics_sp",
++];
++
++export type LinhaTiny = {
++  nome_cliente?: string | null; fone_cliente?: string | null; email_cliente?: string | null;
++  cpf_cnpj_cliente?: string | null; data_pedido?: string | null;
++};
++export type Resultado = { contato: ContatoCliente | null; motivo?: string };
++export type Consulta = (tabela: string, query: string) => Promise<LinhaTiny[]>;
++// Falta de login ou de permissão no Data Mart: aparece como erro claro, nunca como "cliente não encontrado".
++export class ErroAcesso extends Error {}
++
++export const norm = (t: string) =>
++  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
++
++// Padrão ilike para o PostgREST: até 3 palavras do nome, com vogais e "c" trocados por "_" para não depender de acento
++// (o agente guarda o nome sem acento; o Tiny guarda com). O nome exato é conferido depois, em norm().
++export function padraoIlike(nome: string): string {
++  const palavras = norm(nome).split(" ").filter(Boolean);
++  const boas = palavras.filter(p => p.length >= 3);
++  const usar = (boas.length ? boas : palavras).slice(0, 3);
++  return "*" + usar.map(p => p.replace(/[aeiouc]/g, "_")).join("*") + "*";
++}
++
++export const queryTiny = (nome: string) =>
++  `select=nome_cliente,fone_cliente,email_cliente,cpf_cnpj_cliente,data_pedido&nome_cliente=ilike.${encodeURIComponent(padraoIlike(nome))}&order=data_pedido.desc&limit=30`;
++
++const limpar = (v?: string | null) => { const t = (v ?? "").trim(); return t || undefined; };
++const dataBr = (d?: string | null) => { const m = String(d ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; };
++
++export function escolherContato(alvo: string, linhas: LinhaTiny[]): Resultado {
++  const alvoN = norm(alvo);
++  const exatas = linhas.filter(l => norm(l.nome_cliente ?? "") === alvoN);
++  if (!exatas.length) return { contato: null, motivo: "não encontrado nos pedidos do Tiny" };
++  const docs = new Set(exatas.map(l => (l.cpf_cnpj_cliente ?? "").replace(/\D/g, "")).filter(Boolean));
++  if (docs.size > 1) return { contato: null, motivo: "há mais de um cadastro com esse nome no Tiny: confirme na Torre qual é o cliente" };
++  const recentes = [...exatas].sort((a, b) => String(b.data_pedido ?? "").localeCompare(String(a.data_pedido ?? "")));
++  const com = recentes.find(l => limpar(l.fone_cliente) || limpar(l.email_cliente));
++  if (!com) return { contato: null, motivo: "cadastro no Tiny sem telefone nem e-mail" };
++  return {
++    contato: {
++      telefone: limpar(com.fone_cliente),
++      email: limpar(com.email_cliente)?.toLowerCase(),
++      fonte: `Tiny, pedido de ${dataBr(com.data_pedido)}`,
++    },
++  };
++}
++
++const cache = new Map<string, { t: number; v: Resultado }>();
++const TTL_MS = 10 * 60 * 1000;
++export const MAX_CLIENTES = 12;
++
++export async function buscarContatos(consulta: Consulta, nomes: string[]): Promise<{ resultados: Record<string, Resultado>; falhas: number }> {
++  const unicos = [...new Set(nomes)];
++  const resultados: Record<string, Resultado> = {};
++  let falhas = 0;
++  await Promise.all(unicos.map(async (nome, i) => {
++    if (i >= MAX_CLIENTES) { resultados[nome] = { contato: null, motivo: `não consultado (limite de ${MAX_CLIENTES} clientes por vez)` }; return; }
++    const chave = norm(nome), hit = cache.get(chave);
++    if (hit && Date.now() - hit.t < TTL_MS) { resultados[nome] = hit.v; return; }
++    const q = queryTiny(nome);
++    let falhou = false;
++    const lotes = await Promise.all(TABELAS_TINY.map(t => consulta(t, q).catch(e => {
++      if (e instanceof ErroAcesso) throw e;
++      falhas++; falhou = true; return [] as LinhaTiny[];
++    })));
++    const r = escolherContato(nome, lotes.flat());
++    if (!falhou) cache.set(chave, { t: Date.now(), v: r }); // resposta incompleta não fica em cache
++    resultados[nome] = falhou && !r.contato ? { contato: null, motivo: "consulta ao Tiny falhou em alguma tabela: tente de novo" } : r;
++  }));
++  return { resultados, falhas };
++}
++
++// Contato da Torre (dim_cliente + contatos de WhatsApp validados), por nome normalizado + UF. Vem do arquivo gerado
++// por contatos/gerar_contatos_torre.py. Cliente com mais de uma filial no mesmo nome não recebe contato chutado.
++export function contatoDaTorre(cliente: string, uf: string): Resultado | null {
++  const t = TORRE[`${norm(cliente)}|${uf}`];
++  if (!t) return null;
++  if (t.motivo) return { contato: null, motivo: t.motivo };
++  const avisos = [t.emailAviso].filter(Boolean).join("; ");
++  return { contato: { telefone: t.telefone, email: t.email, fonte: `Torre B2B, base de ${TORRE_GERADO_EM}${t.email && t.emailFonte ? `; e-mail ${t.emailFonte}` : ""}`, aviso: avisos || undefined } };
++}
++
++export const limparCacheContatos = () => cache.clear();
+diff -ruN -x contatos_torre.ts v12-original/src/worker.ts app/src/worker.ts
+--- v12-original/src/worker.ts	2026-10-15 17:16:00.762503952 +0000
++++ app/src/worker.ts	2026-10-15 17:32:47.436721432 +0000
+@@ -1,142 +1,177 @@
+-// Agente de Estoque Parado: API do agente no GoDeploy.
+-// GET  /api/radar            radar com parados, entrando em slow moving e a ação de cada time
+-// POST /api/produtos         cadastra um produto real para o teste (fica no env.DB)
+-// POST /api/enviar           envia as mensagens escolhidas para o Google Chat (env.CHAT_WEBHOOK_URL)
+-// POST /api/ia               reescreve os textos de Growth com o AI Proxy (env.AI_PROXY_KEY), se configurado
+-// GET  /api/status           o que está configurado
+-import { DATA } from "./data";
+-import { REAIS_GOCASE, REAIS_INFO, REAIS_GOBEAUTE, REAIS_GOBEAUTE_INFO, REAIS_GOBEAUTE_B2C, REAIS_GOBEAUTE_B2C_INFO } from "./reais";
+-import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
+-
+-type Env = {
+-  DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
+-  CHAT_WEBHOOK_URL?: string;
+-  AI_PROXY_KEY?: string;
+-  AI_MODEL?: string;
+-};
+-
+-const json = (body: unknown, status = 200) =>
+-  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
+-
+-async function setup(env: Env) {
+-  await env.DB.exec(
+-    `CREATE TABLE IF NOT EXISTS produtos_reais (sku TEXT PRIMARY KEY, dados TEXT NOT NULL, criado_por TEXT, criado_em TEXT DEFAULT (datetime('now')))`, []);
+-  await env.DB.exec(
+-    `CREATE TABLE IF NOT EXISTS envios (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT, time TEXT, ok INTEGER, enviado_por TEXT, enviado_em TEXT DEFAULT (datetime('now')))`, []);
+-}
+-
+-// fonte "ficticia": base do hackathon com clientes fictícios. fonte "real": dados reais da Gocase, sem clientes.
+-// Sem fonte (envio e IA): as duas juntas, para achar qualquer SKU.
+-async function base(env: Env, fonte?: string): Promise<Base> {
+-  const r = await env.DB.query(`SELECT dados FROM produtos_reais ORDER BY criado_em DESC`, []);
+-  const cadastrados = r.rows.map(x => JSON.parse(String(x.dados)) as Produto);
+-  const ficticios = DATA.produtos as unknown as Produto[];
+-  if (fonte === "real") return { produtos: [...cadastrados, ...REAIS_GOCASE], clientes: [], pedidos: [] };
+-  if (fonte === "gobeaute") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE], clientes: [], pedidos: [] };
+-  if (fonte === "b2c") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE_B2C], clientes: [], pedidos: [] };
+-  const produtos = fonte === "ficticia" ? [...cadastrados, ...ficticios] : [...cadastrados, ...REAIS_GOCASE, ...REAIS_GOBEAUTE, ...REAIS_GOBEAUTE_B2C, ...ficticios];
+-  return { produtos, clientes: DATA.clientes as never, pedidos: DATA.pedidos as never };
+-}
+-
+-function num(v: unknown): number {
+-  const t = String(v ?? "").trim();
+-  if (!t) return NaN;
+-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+-  return Number.isFinite(n) ? n : NaN;
+-}
+-
+-async function reescreverComIA(env: Env, a: ReturnType<typeof analisar>) {
+-  const growth = a.mensagens.find(m => m.time === "Growth")!;
+-  const prompt = `Você escreve campanhas da Gocase: tom jovem, curto e direto. Reescreva os três textos abaixo (WhatsApp, e-mail com assunto, SMS de até 140 caracteres) para vender este produto. Mantenha exatamente preços, percentuais e datas. Responda só com JSON no formato {"whatsapp":"...","email":"...","sms":"..."}.\n\nProduto: ${a.produto}\nMotivo: ${a.motivo}\n\n${growth.pronto}`;
+-  const res = await fetch("https://ai-proxy.gogroupbr.com/v1/messages", {
+-    method: "POST",
+-    headers: { Authorization: `Bearer ${env.AI_PROXY_KEY}`, "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
+-    body: JSON.stringify({ model: env.AI_MODEL || "claude-sonnet-5-5", max_tokens: 700, messages: [{ role: "user", content: prompt }] }),
+-  });
+-  const body = await res.json() as { content?: { type: string; text?: string }[]; error?: { message?: string } };
+-  if (!res.ok) throw new Error(body.error?.message || `AI Proxy respondeu ${res.status}`);
+-  const texto = (body.content ?? []).map(c => c.text ?? "").join("");
+-  const m = texto.match(/\{[\s\S]*\}/);
+-  if (!m) throw new Error("A IA não devolveu JSON");
+-  return JSON.parse(m[0]) as { whatsapp: string; email: string; sms: string };
+-}
+-
+-export default {
+-  async fetch(request: Request, env: Env): Promise<Response> {
+-    const url = new URL(request.url);
+-    const quem = request.headers.get("x-godeploy-user-email") ?? "anônimo";
+-    try {
+-      await setup(env);
+-
+-      if (url.pathname === "/api/status") {
+-        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, usuario: quem });
+-      }
+-
+-      if (url.pathname === "/api/radar" && request.method === "GET") {
+-        const t0 = Date.now();
+-        const pedida = url.searchParams.get("fonte");
+-        const fonte = pedida === "real" || pedida === "gobeaute" || pedida === "b2c" ? pedida : "ficticia";
+-        const r = radar(await base(env, fonte));
+-        return json({ ...r, fonte, info: fonte === "real" ? REAIS_INFO : fonte === "gobeaute" ? REAIS_GOBEAUTE_INFO : fonte === "b2c" ? REAIS_GOBEAUTE_B2C_INFO : "Base fictícia do hackathon.", ms: Date.now() - t0 });
+-      }
+-
+-      if (url.pathname === "/api/produtos" && request.method === "POST") {
+-        const b = await request.json() as Record<string, unknown>;
+-        const p: Produto = {
+-          sku: "REAL-" + String(b.produto ?? "").normalize("NFD").replace(/[^\w]+/g, "-").toUpperCase().slice(0, 30),
+-          produto: String(b.produto ?? "").trim(),
+-          categoria: String(b.categoria ?? "Copos e garrafas"),
+-          status: "real",
+-          estoque_un: num(b.estoque_un), custo_unit_brl: num(b.custo_unit_brl), preco_cheio_brl: num(b.preco_cheio_brl),
+-          venda_15d_un: num(b.venda_15d_un), venda_15d_anteriores_un: num(b.venda_15d_anteriores_un),
+-        };
+-        const positivos = ["estoque_un", "custo_unit_brl", "preco_cheio_brl"];
+-        const faltando = Object.entries(p)
+-          .filter(([k, v]) => v === "" || (typeof v === "number" && !(positivos.includes(k) ? v > 0 : v >= 0)))
+-          .map(([k]) => k);
+-        if (faltando.length) return json({ erro: `Preencha: ${faltando.join(", ")}` }, 400);
+-        await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
+-        return json({ ok: true, analise: analisar(p, await base(env)) });
+-      }
+-
+-      if (url.pathname === "/api/produtos" && request.method === "DELETE") {
+-        const sku = url.searchParams.get("sku") ?? "";
+-        await env.DB.exec(`DELETE FROM produtos_reais WHERE sku = ?`, [sku]);
+-        return json({ ok: true });
+-      }
+-
+-      if (url.pathname === "/api/enviar" && request.method === "POST") {
+-        const { sku, times } = await request.json() as { sku: string; times: string[] };
+-        if (!env.CHAT_WEBHOOK_URL) return json({ erro: "O webhook do Google Chat ainda não foi configurado. Use Copiar por enquanto." }, 400);
+-        const bs = await base(env);
+-        const p = bs.produtos.find(x => x.sku === sku);
+-        if (!p) return json({ erro: "Produto não encontrado" }, 404);
+-        const a = analisar(p, bs);
+-        const enviados: { time: string; ok: boolean }[] = [];
+-        for (const m of a.mensagens.filter(m => times.includes(m.time))) {
+-          const r = await fetch(env.CHAT_WEBHOOK_URL, {
+-            method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" },
+-            body: JSON.stringify({ text: textoChat(a, m) }),
+-          });
+-          enviados.push({ time: m.time, ok: r.ok });
+-          await env.DB.exec(`INSERT INTO envios (sku, time, ok, enviado_por) VALUES (?, ?, ?, ?)`, [sku, m.time, r.ok ? 1 : 0, quem]);
+-        }
+-        return json({ enviados });
+-      }
+-
+-      if (url.pathname === "/api/ia" && request.method === "POST") {
+-        if (!env.AI_PROXY_KEY) return json({ erro: "A chave do AI Proxy ainda não foi configurada. Os textos do agente continuam valendo." }, 400);
+-        const { sku } = await request.json() as { sku: string };
+-        const bs = await base(env);
+-        const p = bs.produtos.find(x => x.sku === sku);
+-        if (!p) return json({ erro: "Produto não encontrado" }, 404);
+-        return json(await reescreverComIA(env, analisar(p, bs)));
+-      }
+-
+-      return json({ erro: "Rota não encontrada" }, 404);
+-    } catch (e) {
+-      console.log("erro", (e as Error).message);
+-      return json({ erro: (e as Error).message }, 500);
+-    }
+-  },
+-};
++// Agente de Estoque Parado: API do agente no GoDeploy.
++// GET  /api/radar            radar com parados, entrando em slow moving e a ação de cada time
++// POST /api/produtos         cadastra um produto real para o teste (fica no env.DB)
++// POST /api/enviar           envia as mensagens escolhidas para o Google Chat (env.CHAT_WEBHOOK_URL)
++// POST /api/ia               reescreve os textos de Growth com o AI Proxy (env.AI_PROXY_KEY), se configurado
++// GET  /api/b2b/contatos     contato dos clientes B2B de um produto, ao vivo do Data Mart (Tiny)
++// GET  /api/status           o que está configurado
++import { DATA } from "./data";
++import { REAIS_GOCASE, REAIS_INFO, REAIS_GOBEAUTE, REAIS_GOBEAUTE_INFO, REAIS_GOBEAUTE_B2C, REAIS_GOBEAUTE_B2C_INFO } from "./reais";
++import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
++import { buscarContatos, contatoDaTorre, ErroAcesso, type LinhaTiny, type Resultado } from "./contatos";
++
++type Env = {
++  DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
++  CHAT_WEBHOOK_URL?: string;
++  AI_PROXY_KEY?: string;
++  AI_MODEL?: string;
++  PROXY_BASE_URL?: string; // proxy de dados do GoDeploy (Data Mart, somente leitura)
++};
++
++const json = (body: unknown, status = 200) =>
++  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
++
++async function setup(env: Env) {
++  await env.DB.exec(
++    `CREATE TABLE IF NOT EXISTS produtos_reais (sku TEXT PRIMARY KEY, dados TEXT NOT NULL, criado_por TEXT, criado_em TEXT DEFAULT (datetime('now')))`, []);
++  await env.DB.exec(
++    `CREATE TABLE IF NOT EXISTS envios (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT, time TEXT, ok INTEGER, enviado_por TEXT, enviado_em TEXT DEFAULT (datetime('now')))`, []);
++}
++
++// fonte "ficticia": base do hackathon com clientes fictícios. fonte "real": dados reais da Gocase, sem clientes.
++// Sem fonte (envio e IA): as duas juntas, para achar qualquer SKU.
++async function base(env: Env, fonte?: string): Promise<Base> {
++  const r = await env.DB.query(`SELECT dados FROM produtos_reais ORDER BY criado_em DESC`, []);
++  const cadastrados = r.rows.map(x => JSON.parse(String(x.dados)) as Produto);
++  const ficticios = DATA.produtos as unknown as Produto[];
++  if (fonte === "real") return { produtos: [...cadastrados, ...REAIS_GOCASE], clientes: [], pedidos: [] };
++  if (fonte === "gobeaute") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE], clientes: [], pedidos: [] };
++  if (fonte === "b2c") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE_B2C], clientes: [], pedidos: [] };
++  const produtos = fonte === "ficticia" ? [...cadastrados, ...ficticios] : [...cadastrados, ...REAIS_GOCASE, ...REAIS_GOBEAUTE, ...REAIS_GOBEAUTE_B2C, ...ficticios];
++  return { produtos, clientes: DATA.clientes as never, pedidos: DATA.pedidos as never };
++}
++
++function num(v: unknown): number {
++  const t = String(v ?? "").trim();
++  if (!t) return NaN;
++  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
++  return Number.isFinite(n) ? n : NaN;
++}
++
++// Leitura do Data Mart pelo proxy do GoDeploy, com o login de quem usa o app (a permissão é dele, não do app).
++async function pg(env: Env, request: Request, tabela: string, query: string): Promise<LinhaTiny[]> {
++  if (!env.PROXY_BASE_URL) throw new ErroAcesso("Proxy de dados não configurado neste ambiente.");
++  const r = await fetch(`${env.PROXY_BASE_URL}/datamart/api.${tabela}?${query}`, { headers: { Cookie: request.headers.get("Cookie") ?? "" } });
++  if (r.status === 401) throw new ErroAcesso("Sem login para o Data Mart. Abra o app logado.");
++  if (r.status === 403) throw new ErroAcesso("Você não tem permissão de leitura no Data Mart. Peça o acesso no console do GoDeploy.");
++  if (!r.ok) throw new Error(`Data Mart respondeu ${r.status}`);
++  return await r.json() as LinhaTiny[];
++}
++
++async function reescreverComIA(env: Env, a: ReturnType<typeof analisar>) {
++  const growth = a.mensagens.find(m => m.time === "Growth")!;
++  const prompt = `Você escreve campanhas da Gocase: tom jovem, curto e direto. Reescreva os três textos abaixo (WhatsApp, e-mail com assunto, SMS de até 140 caracteres) para vender este produto. Mantenha exatamente preços, percentuais e datas. Responda só com JSON no formato {"whatsapp":"...","email":"...","sms":"..."}.\n\nProduto: ${a.produto}\nMotivo: ${a.motivo}\n\n${growth.pronto}`;
++  const res = await fetch("https://ai-proxy.gogroupbr.com/v1/messages", {
++    method: "POST",
++    headers: { Authorization: `Bearer ${env.AI_PROXY_KEY}`, "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
++    body: JSON.stringify({ model: env.AI_MODEL || "claude-sonnet-5-5", max_tokens: 700, messages: [{ role: "user", content: prompt }] }),
++  });
++  const body = await res.json() as { content?: { type: string; text?: string }[]; error?: { message?: string } };
++  if (!res.ok) throw new Error(body.error?.message || `AI Proxy respondeu ${res.status}`);
++  const texto = (body.content ?? []).map(c => c.text ?? "").join("");
++  const m = texto.match(/\{[\s\S]*\}/);
++  if (!m) throw new Error("A IA não devolveu JSON");
++  return JSON.parse(m[0]) as { whatsapp: string; email: string; sms: string };
++}
++
++export default {
++  async fetch(request: Request, env: Env): Promise<Response> {
++    const url = new URL(request.url);
++    const quem = request.headers.get("x-godeploy-user-email") ?? "anônimo";
++    try {
++      await setup(env);
++
++      if (url.pathname === "/api/status") {
++        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, datamart: !!env.PROXY_BASE_URL, usuario: quem });
++      }
++
++      if (url.pathname === "/api/radar" && request.method === "GET") {
++        const t0 = Date.now();
++        const pedida = url.searchParams.get("fonte");
++        const fonte = pedida === "real" || pedida === "gobeaute" || pedida === "b2c" ? pedida : "ficticia";
++        const r = radar(await base(env, fonte));
++        return json({ ...r, fonte, info: fonte === "real" ? REAIS_INFO : fonte === "gobeaute" ? REAIS_GOBEAUTE_INFO : fonte === "b2c" ? REAIS_GOBEAUTE_B2C_INFO : "Base fictícia do hackathon.", ms: Date.now() - t0 });
++      }
++
++      if (url.pathname === "/api/b2b/contatos" && request.method === "GET") {
++        const sku = url.searchParams.get("sku") ?? "";
++        const bs = await base(env);
++        const p = bs.produtos.find(x => x.sku === sku);
++        if (!p) return json({ erro: "Produto não encontrado" }, 404);
++        const acoes = analisar(p, bs).mensagens.find(m => m.time === "B2B")?.acoes ?? [];
++        // Torre primeiro (cobre quase todos); o que ela não tiver cai para o Tiny ao vivo, com o login de quem usa.
++        const resultados: Record<string, Resultado> = {};
++        const faltam: string[] = [];
++        for (const a of acoes) { const t = contatoDaTorre(a.cliente, a.uf); if (t) resultados[a.cliente] = t; else faltam.push(a.cliente); }
++        let falhas = 0;
++        try {
++          if (faltam.length) { const r = await buscarContatos((t, q) => pg(env, request, t, q), faltam); Object.assign(resultados, r.resultados); falhas = r.falhas; }
++        } catch (e) {
++          if (!(e instanceof ErroAcesso)) throw e;
++          for (const n of faltam) resultados[n] = { contato: null, motivo: e.message };
++        }
++        const achou = Object.values(resultados).filter(r => r.contato).length;
++        return json({ contatos: resultados, resumo: { clientes: Object.keys(resultados).length, com_contato: achou, consultas_com_erro: falhas },
++          fonte: "Torre B2B (cadastro e WhatsApp validado); Tiny para quem não está na Torre." });
++      }
++
++      if (url.pathname === "/api/produtos" && request.method === "POST") {
++        const b = await request.json() as Record<string, unknown>;
++        const p: Produto = {
++          sku: "REAL-" + String(b.produto ?? "").normalize("NFD").replace(/[^\w]+/g, "-").toUpperCase().slice(0, 30),
++          produto: String(b.produto ?? "").trim(),
++          categoria: String(b.categoria ?? "Copos e garrafas"),
++          status: "real",
++          estoque_un: num(b.estoque_un), custo_unit_brl: num(b.custo_unit_brl), preco_cheio_brl: num(b.preco_cheio_brl),
++          venda_15d_un: num(b.venda_15d_un), venda_15d_anteriores_un: num(b.venda_15d_anteriores_un),
++        };
++        const positivos = ["estoque_un", "custo_unit_brl", "preco_cheio_brl"];
++        const faltando = Object.entries(p)
++          .filter(([k, v]) => v === "" || (typeof v === "number" && !(positivos.includes(k) ? v > 0 : v >= 0)))
++          .map(([k]) => k);
++        if (faltando.length) return json({ erro: `Preencha: ${faltando.join(", ")}` }, 400);
++        await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
++        return json({ ok: true, analise: analisar(p, await base(env)) });
++      }
++
++      if (url.pathname === "/api/produtos" && request.method === "DELETE") {
++        const sku = url.searchParams.get("sku") ?? "";
++        await env.DB.exec(`DELETE FROM produtos_reais WHERE sku = ?`, [sku]);
++        return json({ ok: true });
++      }
++
++      if (url.pathname === "/api/enviar" && request.method === "POST") {
++        const { sku, times } = await request.json() as { sku: string; times: string[] };
++        if (!env.CHAT_WEBHOOK_URL) return json({ erro: "O webhook do Google Chat ainda não foi configurado. Use Copiar por enquanto." }, 400);
++        const bs = await base(env);
++        const p = bs.produtos.find(x => x.sku === sku);
++        if (!p) return json({ erro: "Produto não encontrado" }, 404);
++        const a = analisar(p, bs);
++        const enviados: { time: string; ok: boolean }[] = [];
++        for (const m of a.mensagens.filter(m => times.includes(m.time))) {
++          const r = await fetch(env.CHAT_WEBHOOK_URL, {
++            method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8" },
++            body: JSON.stringify({ text: textoChat(a, m) }),
++          });
++          enviados.push({ time: m.time, ok: r.ok });
++          await env.DB.exec(`INSERT INTO envios (sku, time, ok, enviado_por) VALUES (?, ?, ?, ?)`, [sku, m.time, r.ok ? 1 : 0, quem]);
++        }
++        return json({ enviados });
++      }
++
++      if (url.pathname === "/api/ia" && request.method === "POST") {
++        if (!env.AI_PROXY_KEY) return json({ erro: "A chave do AI Proxy ainda não foi configurada. Os textos do agente continuam valendo." }, 400);
++        const { sku } = await request.json() as { sku: string };
++        const bs = await base(env);
++        const p = bs.produtos.find(x => x.sku === sku);
++        if (!p) return json({ erro: "Produto não encontrado" }, 404);
++        return json(await reescreverComIA(env, analisar(p, bs)));
++      }
++
++      return json({ erro: "Rota não encontrada" }, 404);
++    } catch (e) {
++      console.log("erro", (e as Error).message);
++      return json({ erro: (e as Error).message }, 500);
++    }
++  },
++};
