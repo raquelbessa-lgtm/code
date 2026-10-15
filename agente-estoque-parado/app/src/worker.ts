@@ -10,9 +10,8 @@
 // POST /api/acoes/fechar     fecha uma ação { id, nota }
 // GET  /api/status           o que está configurado
 import { DATA } from "./data";
-import { analisar, radar, textoChat, type Base, type Extras, type Produto } from "./agente";
+import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
 import { INFLUENCIA } from "./influencia";
-import { carregarWishlist, votosDoProduto, type WishlistEstado } from "./afiliados";
 
 type Env = {
   DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
@@ -20,7 +19,6 @@ type Env = {
   AI_PROXY_KEY?: string;
   AI_MODEL?: string;
   PROXY_BASE_URL?: string;
-  WISHLIST_KEY?: string; // ADMIN_KEY do app wishlist-afiliadas (projeto de afiliados)
 };
 
 const json = (body: unknown, status = 200) =>
@@ -142,21 +140,6 @@ async function dadosDaLinha(env: Env, request: Request, linha: string) {
 }
 
 
-// Contexto do projeto de afiliados para o bloco de Influência: Wishlist lido uma vez por requisição (cache de 5 min).
-async function extrasAfiliados(env: Env): Promise<{ extras: Extras; estado: WishlistEstado["estado"] }> {
-  const w: WishlistEstado = await carregarWishlist(env.WISHLIST_KEY);
-  if (w.estado === "erro") console.log("wishlist", w.motivo);
-  return {
-    estado: w.estado,
-    extras: {
-      afiliados: (p: Produto) => ({
-        wishlistEstado: w.estado,
-        wishlist: w.estado === "ok" ? votosDoProduto(w.wishlist, p.produto, p.marca ?? "Gocase") : null,
-      }),
-    },
-  };
-}
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -165,12 +148,12 @@ export default {
       await setup(env);
 
       if (url.pathname === "/api/status") {
-        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, datamart: !!env.PROXY_BASE_URL, wishlist: !!env.WISHLIST_KEY, usuario: quem });
+        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, datamart: !!env.PROXY_BASE_URL, usuario: quem });
       }
 
       if (url.pathname === "/api/radar" && request.method === "GET") {
         const t0 = Date.now();
-        const r = radar(await base(env), new Date(), (await extrasAfiliados(env)).extras);
+        const r = radar(await base(env));
         return json({ ...r, ms: Date.now() - t0 });
       }
 
@@ -186,12 +169,12 @@ export default {
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
         const aberta = await env.DB.query(`SELECT id FROM acoes WHERE sku = ? AND status = 'aberta' ORDER BY id DESC LIMIT 1`, [sku]);
         if (aberta.rows.length) return json({ ok: true, id: aberta.rows[0].id, ja_existia: true });
-        const a = analisar(p, bs, new Date(), (await extrasAfiliados(env)).extras);
+        const a = analisar(p, bs);
         const m = a.mensagens[0]; // primeira solução = afiliadas
         const baseline = JSON.stringify({
           data: new Date().toISOString().slice(0, 10), cobertura_dias: a.coberturaDias, estoque_un: p.estoque_un,
           venda_30d_un: p.venda_media_30d_un, po_pendente_un: p.po_pendente_un ?? 0, valor_estoque_brl: a.valorEstoque,
-          fonte: "projeto de afiliados: GoCreators " + INFLUENCIA.coletado_em + " e Wishlist",
+          fonte: "projeto de afiliados: GoCreators e InfluHub/Inbazz " + INFLUENCIA.coletado_em,
         });
         await env.DB.exec(`INSERT INTO acoes (sku, produto, time, oque_fazer, pronto, baseline, criada_por) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [sku, p.produto, m.time, m.oQueFazer, m.pronto, baseline, quem]);
@@ -240,7 +223,7 @@ export default {
         const po = num(b.po_pendente_un);
         if (Number.isFinite(po) && po > 0) p.po_pendente_un = po;
         await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
-        return json({ ok: true, analise: analisar(p, await base(env), new Date(), (await extrasAfiliados(env)).extras) });
+        return json({ ok: true, analise: analisar(p, await base(env)) });
       }
 
       if (url.pathname === "/api/produtos" && request.method === "DELETE") {
@@ -255,7 +238,7 @@ export default {
         const bs = await base(env);
         const p = bs.produtos.find(x => x.sku === sku);
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
-        const a = analisar(p, bs, new Date(), (await extrasAfiliados(env)).extras);
+        const a = analisar(p, bs);
         const enviados: { time: string; ok: boolean }[] = [];
         for (const m of a.mensagens.filter(m => times.includes(m.time))) {
           const r = await fetch(env.CHAT_WEBHOOK_URL, {
@@ -274,7 +257,7 @@ export default {
         const bs = await base(env);
         const p = bs.produtos.find(x => x.sku === sku);
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
-        return json(await reescreverComIA(env, analisar(p, bs, new Date(), (await extrasAfiliados(env)).extras)));
+        return json(await reescreverComIA(env, analisar(p, bs)));
       }
 
       return json({ erro: "Rota não encontrada" }, 404);

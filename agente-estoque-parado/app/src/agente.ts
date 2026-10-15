@@ -1,6 +1,6 @@
 // Lógica do Agente de Estoque Parado: radar, oferta com margem e uma mensagem pronta por time.
 // Funções puras, sem I/O, para rodar igual no GoDeploy e no teste local.
-import { missaoInfluencia, type ExtrasAfiliados } from "./influencia";
+import { missaoInfluencia } from "./influencia";
 
 export type Produto = {
   sku: string;
@@ -105,9 +105,7 @@ function publico(p: Produto, camp: Produto | undefined, base: Base) {
   };
 }
 
-export type Extras = { afiliados?: (p: Produto) => ExtrasAfiliados };
-
-export function analisar(p: Produto, base: Base, hoje = new Date(), extras: Extras = {}): Analise {
+export function analisar(p: Produto, base: Base, hoje = new Date()): Analise {
   const classe = classificar(p);
   const cob = cobertura(p), v = variacao(p);
   const precoMin = Math.round(p.custo_unit_brl * MARGEM_MINIMA * 100) / 100;
@@ -158,7 +156,7 @@ export function analisar(p: Produto, base: Base, hoje = new Date(), extras: Extr
     : `${novos.length} clientes que compraram pela primeira vez nos últimos 30 dias`;
 
   // Influência: missão de escoamento para afiliadas, com comissão extra limitada pela margem (nunca desconto ao cliente).
-  const missao = missaoInfluencia(p, precoMin, motivo, cob, v, classe, saida, extras.afiliados?.(p));
+  const missao = missaoInfluencia(p, precoMin, motivo, cob, v, classe, saida, hoje);
 
   const textoWhats =`Oi! Separamos uma oferta pra você: ${oferta.descricao}. Vale até ${ate} ou enquanto durar o estoque.`;
   const textoEmail = `Assunto: ${oferta.tipo === "kit" ? "Seu kit com preço especial" : "Preço especial só para clientes Gocase"}\n${oferta.descricao}. Válido até ${ate}.`;
@@ -236,8 +234,8 @@ export function analisar(p: Produto, base: Base, hoje = new Date(), extras: Extr
   };
 }
 
-export function radar(base: Base, hoje = new Date(), extras: Extras = {}) {
-  const todos = base.produtos.map(p => analisar(p, base, hoje, extras)).sort((a, b) => b.valorEstoque - a.valorEstoque);
+export function radar(base: Base, hoje = new Date()) {
+  const todos = base.produtos.map(p => analisar(p, base, hoje)).sort((a, b) => b.valorEstoque - a.valorEstoque);
   return {
     reais: todos.filter(a => a.status === "real"),
     parados: todos.filter(a => a.classe === "parado" && a.status !== "real"),

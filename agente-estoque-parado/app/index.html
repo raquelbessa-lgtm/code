@@ -86,7 +86,6 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     <span class="chip" id="chipChat">Chat: não configurado</span>
     <span class="chip" id="chipIA">IA: textos do agente</span>
     <span class="chip" id="chipDM">Data Mart: verificando</span>
-    <span class="chip" id="chipWL">Wishlist afiliadas: verificando</span>
     <span class="timer" id="timer" aria-live="polite">0,0 s</span>
     <button class="go" id="rodar">Rodar agente</button>
   </header>
@@ -169,8 +168,6 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
       $("#chipIA").classList.toggle("on", status.ia);
       $("#chipDM").textContent = status.datamart ? "Data Mart: conectado" : "Data Mart: indisponível";
       $("#chipDM").classList.toggle("on", status.datamart);
-      $("#chipWL").textContent = status.wishlist ? "Wishlist afiliadas: conectado" : "Wishlist afiliadas: sem chave";
-      $("#chipWL").classList.toggle("on", status.wishlist);
     } catch (e) {}
   }
 
