@@ -1,6 +1,6 @@
-import { DATA } from "../app/src/data";
-import * as NOVO from "../app/src/agente";
-import * as ANTIGO from "../app-original/src/agente";
+import { DATA } from "../app-v2-influencia/src/data";
+import * as NOVO from "../app-v2-influencia/src/agente";
+import * as ANTIGO from "../app-v2-original/src/agente";
 
 // Dados REAIS do Data Mart (api.supply_fluxo_estoque snapshot 08/09 + api.supply_sales, janelas 09/08-07/09 e 10/07-08/08).
 const REAIS = [

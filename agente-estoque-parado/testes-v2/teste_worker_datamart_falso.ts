@@ -1,5 +1,5 @@
 // teste do worker com um Data Mart FALSO só para validar o parsing/paginação do código (os números do Data Mart real vieram das consultas feitas antes)
-import worker from "../app/src/worker";
+import worker from "../app-v2-influencia/src/worker";
 const calls: string[] = [];
 const rowsSales = Array.from({ length: 1500 }, (_, i) => ({ id: i + 1, sale_date: i < 900 ? "2026-09-0" + (1 + (i % 7)) : "2026-08-1" + (i % 9), sales_quantity: 2, invoicing: 100 }));
 (globalThis as any).fetch = async (u: string, init: any) => {

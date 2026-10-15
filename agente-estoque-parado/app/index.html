@@ -29,6 +29,8 @@ button.go:hover { filter: brightness(.95); }
 button.prim { background: var(--azul); color: var(--branco); }
 button:disabled { opacity: .5; cursor: default; }
 :focus-visible { outline: 3px solid var(--lima); outline-offset: 2px; }
+.fonte { display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+.fonte select { font: 600 .9rem var(--fonte); border-radius: 999px; border: 0; padding: 8px 12px; color: var(--azul); background: var(--branco); }
 .timer { font-variant-numeric: tabular-nums; font-weight: 700; background: var(--branco); color: var(--azul); border-radius: 999px; padding: 8px 14px; }
 main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
 .panel { background: var(--off); border-radius: 22px; padding: 20px; min-width: 0; }
@@ -52,19 +54,37 @@ main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: 
 .msgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .msg { background: var(--branco); border-radius: 16px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
 .msg .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.msg.primeira { outline: 3px solid var(--lima); outline-offset: -3px; }
-.primeira-bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--azul); color: var(--branco); border-radius: 16px; padding: 10px 14px; margin: 0 0 12px; }
-.primeira-bar b { font-weight: 600; }
-.acoes { display: grid; gap: 8px; margin-top: 10px; }
-.acao { background: var(--branco); border-radius: 12px; padding: 8px 12px; font-size: .85rem; display: grid; gap: 2px; }
-.acao small { color: var(--suave); }
 .msg h3 { margin: 0; font-size: 1rem; color: var(--azul); }
 .msg label { font-size: .8rem; color: var(--suave); display: flex; gap: 6px; align-items: center; }
 .msg dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: .88rem; }
 .msg dt { font-weight: 600; }
 .msg dd { margin: 0; min-width: 0; }
 .msg pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; font: .82rem/1.45 var(--fonte); background: var(--off); border-radius: 10px; padding: 10px; max-height: 220px; overflow: auto; }
-.msg .acts { display: flex; gap: 8px; }
+.msg .acts, .msg .vends { display: flex; flex-wrap: wrap; gap: 8px; }
+.msg .vends button { padding: 5px 12px; font-size: .78rem; background: var(--off); }
+.resumo-b2b { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
+.resumo-b2b span { font-size: .76rem; font-weight: 600; background: var(--off); border-radius: 999px; padding: 3px 10px; color: var(--azul); }
+.vend-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: .88rem; color: var(--azul); }
+.vend-h button { padding: 3px 10px; font-size: .74rem; background: var(--off); }
+.msg.b2b { grid-column: 1 / -1; }
+.clis { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }
+.cli { border: 1.5px solid var(--linha); border-radius: 14px; padding: 10px 12px; display: grid; gap: 6px; background: var(--branco); }
+.cli p { margin: 0; font-size: .84rem; }
+.cli .top-c { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.cli .top-c b { font-size: .95rem; }
+.cli .meta { font-size: .78rem; color: var(--suave); }
+.pill { font-size: .68rem; font-weight: 700; border-radius: 999px; padding: 2px 9px; background: var(--azul); color: var(--branco); }
+.pill.incluir { background: var(--lima); color: var(--azul); }
+.cli .aviso { color: var(--verm); }
+.cli .ct { background: var(--off); border-radius: 8px; padding: 6px 8px; }
+.cli .ct.sem { color: var(--verm); }
+.cli textarea { width: 100%; font: .82rem/1.4 var(--fonte); border: 1.5px solid var(--linha); border-radius: 10px; padding: 8px; resize: vertical; background: var(--off); color: var(--tinta); }
+.cli details summary { font-size: .8rem; }
+.btnlink { font: 600 .8rem var(--fonte); border-radius: 999px; padding: 5px 12px; background: var(--lima); color: var(--azul); text-decoration: none; border: 2px solid var(--lima); }
+details.txt { font-size: .8rem; }
+.exec { background: color-mix(in srgb, var(--lima) 22%, var(--branco)); border-radius: 10px; padding: 8px 10px; font-size: .82rem; }
+.exec .canal { font-size: .76rem; font-weight: 600; color: var(--azul); }
+.exec ol { margin: 4px 0 0; padding-left: 1.2em; display: grid; gap: 2px; }
 .msg .acts button { padding: 5px 12px; font-size: .8rem; }
 .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 0; }
 .note { font-size: .85rem; color: var(--suave); }
@@ -82,11 +102,16 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
 <body>
 <div class="wrap">
   <header>
-    <h1>Agente de Estoque Parado <small>Acha o que parou ou está parando e entrega a ação pronta para o dono de cada time</small></h1>
+    <h1>Agente de Estoque Parado <small>Acha o que parou ou está parando e entrega a ação pronta: recompra no B2B e influenciadores no B2C</small></h1>
     <span class="chip" id="chipChat">Chat: não configurado</span>
     <span class="chip" id="chipIA">IA: textos do agente</span>
-    <span class="chip" id="chipDM">Data Mart: verificando</span>
     <span class="timer" id="timer" aria-live="polite">0,0 s</span>
+    <label class="fonte"><span>Base</span>
+      <select id="fonte">
+        <option value="b2c">Gobeaute B2C real (planilha 14/10)</option>
+        <option value="gobeaute" selected>Gobeaute B2B real (Torre)</option>
+      </select>
+    </label>
     <button class="go" id="rodar">Rodar agente</button>
   </header>
 
@@ -102,41 +127,21 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     </section>
   </main>
 
-  <details id="acoesBox">
-    <summary>Ações para afiliadas criadas</summary>
-    <p class="note">Cada ação guarda a cobertura e a venda de quando foi criada, para comparar depois. Feche a ação quando o resultado estiver medido.</p>
-    <div class="acoes" id="acoesLista"><p class="note">Abra para carregar.</p></div>
-  </details>
-
   <details id="realBox">
     <summary>Testar com um produto real</summary>
-    <p class="note">Puxe a linha direto do Data Mart ou digite os números passados por Growth ou Supply. O produto entra no radar com a etiqueta "real" e fica salvo para o time.</p>
+    <p class="note">Use números passados por Growth ou Supply. O produto entra no radar com a etiqueta "real" e fica salvo para o time.</p>
     <form id="formReal">
-      <div class="full">
-        <label style="flex:1;min-width:240px">Puxar do Data Mart (linha Gocase)<select id="dm-linha"><option value="">Abra para carregar as linhas</option></select></label>
-        <button type="button" id="dm-puxar">Puxar do Data Mart</button>
-        <span class="note" id="dmMsg"></span>
-      </div>
       <label>Produto<input id="r-produto" required placeholder="Copo Vibe Preto"></label>
-      <label>Marca
-        <select id="r-marca">
-          <option>Gocase</option><option>Barbours</option><option>Lescent</option><option>Kokeshi</option><option>Rituária</option><option>Ápice</option><option>Denavita</option>
-        </select>
-      </label>
       <label>Categoria
         <select id="r-categoria">
-          <option>Copos e garrafas</option><option>Capinhas</option><option>Bolsas</option><option>Acessórios</option><option>Pet</option><option>Cabelo</option><option>Skincare</option><option>Perfumaria</option><option>Suplementos</option>
+          <option>Copos e garrafas</option><option>Capinhas</option><option>Bolsas</option><option>Acessórios</option><option>Pet</option>
         </select>
-      </label>
-      <label>Situação do item
-        <select id="r-situacao"><option value="linha">Linha / recompra</option><option value="descontinuado">Descontinuado</option></select>
       </label>
       <label>Estoque (unidades)<input id="r-estoque_un" inputmode="decimal" required></label>
       <label>Custo por unidade (R$)<input id="r-custo_unit_brl" inputmode="decimal" required></label>
       <label>Preço cheio (R$)<input id="r-preco_cheio_brl" inputmode="decimal" required></label>
-      <label>Venda últimos 30 dias (un)<input id="r-venda_media_30d_un" inputmode="decimal" required></label>
-      <label>Venda 30 dias anteriores (un)<input id="r-venda_30d_anteriores_un" inputmode="decimal" required></label>
-      <label>Pedido de compra em aberto (un, opcional)<input id="r-po_pendente_un" inputmode="decimal"></label>
+      <label>Venda últimos 15 dias (un)<input id="r-venda_15d_un" inputmode="decimal" required></label>
+      <label>Venda 15 dias anteriores (un)<input id="r-venda_15d_anteriores_un" inputmode="decimal" required></label>
       <div class="full"><button class="prim" type="submit">Analisar produto real</button><span class="note" id="realMsg"></span></div>
     </form>
   </details>
@@ -166,8 +171,6 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
       $("#chipChat").classList.toggle("on", status.webhook);
       $("#chipIA").textContent = status.ia ? "IA: AI Proxy" : "IA: textos do agente";
       $("#chipIA").classList.toggle("on", status.ia);
-      $("#chipDM").textContent = status.datamart ? "Data Mart: conectado" : "Data Mart: indisponível";
-      $("#chipDM").classList.toggle("on", status.datamart);
     } catch (e) {}
   }
 
@@ -179,10 +182,11 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
   function renderRadar() {
     const p = dados.parados, r = dados.emRisco;
     $("#radar").innerHTML =
+      `<p class="help"><b>${dados.fonte === "ficticia" ? "Base fictícia" : "Dados reais"}.</b> ${esc(dados.info)}</p>` +
       (dados.reais.length ? `<h2>Produto real em teste (${dados.reais.length})</h2><p class="help">Números passados pelo time.</p><div class="list">${dados.reais.map(item).join("")}</div>` : "") +
-      `<h2>Entrando em slow moving (${r.length})</h2><p class="help">Venda caindo rápido e estoque subindo. Dá para agir antes de parar.</p>` +
+      `<h2>Entrando em slow moving (${r.length})</h2><p class="help">Critério em teste, ainda não é regra da empresa: estoque entre 90 e 120 dias, ou venda caindo 30% ou mais com estoque acima de 60 dias.</p>` +
       `<div class="list">${r.map(item).join("") || '<p class="empty">Nenhum agora.</p>'}</div>` +
-      `<h2>Parados (${p.length})</h2><p class="help">Do maior valor em estoque para o menor.</p>` +
+      `<h2>Slow moving (${p.length})</h2><p class="help">Estoque para mais de 120 dias no ritmo dos últimos 15 dias. Do maior valor em estoque para o menor.</p>` +
       `<div class="list">${p.map(item).join("")}</div>` +
       (dados.saudaveis.length ? `<p class="help">Saudáveis, sem ação: ${esc(dados.saudaveis.join(", "))}</p>` : "");
     document.querySelectorAll(".item").forEach((b) => b.addEventListener("click", () => abrir(b.dataset.sku)));
@@ -195,7 +199,7 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     if (!atual) return;
     document.querySelectorAll(".item").forEach((b) => b.setAttribute("aria-current", String(b.dataset.sku === sku)));
     const a = atual;
-    const tag = a.status === "real" ? `<span class="tag real">produto real, ${a.classe === "parado" ? "parado" : a.classe === "em_risco" ? "entrando em slow moving" : "saudável"}</span>` :a.classe === "em_risco" ? '<span class="tag risco">entrando em slow moving</span>' : '<span class="tag">parado</span>';
+    const tag = a.status === "real" ? `<span class="tag real">produto real, ${a.classe === "parado" ? "slow moving" : a.classe === "em_risco" ? "entrando em slow moving" : "saudável"}</span>` :a.classe === "em_risco" ? '<span class="tag risco">entrando em slow moving</span>' : '<span class="tag">slow moving</span>';
     $("#detalhe").innerHTML = `
       <div class="head-prod"><h2>${esc(a.produto)}</h2>${tag}</div>
       <div class="facts">
@@ -203,13 +207,17 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
         <span>Oferta: <b>${esc(a.oferta.descricao)}</b></span>
         <span>Preço mínimo com margem: <b>${brl(a.precoMinimo)}</b></span>
       </div>
-      <div class="primeira-bar"><b>Primeira solução: afiliadas.</b><span>${esc(a.mensagens[0].oQueFazer)}</span><button class="go" id="acao">Criar ação para afiliadas</button><span class="note" id="acaoMsg" style="color:var(--branco)"></span></div>
       <div class="msgs">${a.mensagens.map((m, i) => `
-        <article class="msg${i === 0 ? " primeira" : ""}">
+        <article class="msg${m.acoes ? " b2b" : ""}">
           <div class="top"><h3>${esc(m.time)}</h3><label><input type="checkbox" class="sel" value="${esc(m.time)}" checked> enviar</label></div>
           <dl><dt>O que fazer</dt><dd>${esc(m.oQueFazer)}</dd><dt>Por quê</dt><dd>${esc(m.porque)}</dd><dt>Até quando</dt><dd>${esc(m.ateQuando)}</dd></dl>
-          <pre id="pronto-${i}">${esc(m.pronto)}</pre>
-          <div class="acts"><button data-copy="${i}">Copiar</button></div>
+          ${m.acoes ? cartoes(m, i) + `<details class="txt"><summary>Texto completo para copiar</summary><pre id="pronto-${i}">${esc(m.pronto)}</pre></details>` : `<pre id="pronto-${i}">${esc(m.pronto)}</pre>`}
+          <div class="exec">
+            <b>Como executar agora</b> <span class="canal">${esc(m.executar.canal)}</span>
+            <ol>${m.executar.passos.map((p) => `<li>${esc(p)}</li>`).join("")}</ol>
+          </div>
+          ${m.porVendedor ? `<div class="vends">${m.porVendedor.map((v, j) => `<button data-vend="${i}:${j}">Copiar para ${esc(v.vendedor)} (${v.clientes} cliente${v.clientes > 1 ? "s" : ""})</button>`).join("")}</div>` : ""}
+          <div class="acts"><button data-copy="${i}">Copiar</button>${m.porVendedor ? `<button data-csv="${i}">Baixar lista (CSV)</button>` : ""}</div>
         </article>`).join("")}
       </div>
       <div class="bar">
@@ -219,10 +227,82 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
         <span class="note" id="envioMsg"></span>
       </div>`;
     document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => copiar(b)));
+    document.querySelectorAll("[data-vend]").forEach((b) => b.addEventListener("click", () => {
+      const [i, j] = b.dataset.vend.split(":").map(Number);
+      copiarTexto(b, atual.mensagens[i].porVendedor[j].texto);
+    }));
+    document.querySelectorAll("[data-csv]").forEach((b) => b.addEventListener("click", () => baixarCsv(+b.dataset.csv)));
+    document.querySelectorAll("[data-cc]").forEach((b) => b.addEventListener("click", () => {
+      const [i, j, t] = b.dataset.cc.split(":"); const x = atual.mensagens[+i].acoes[+j];
+      copiarTexto(b, t === "wa" ? x.whatsapp : `Assunto: ${x.emailAssunto}\n\n${x.emailCorpo}`);
+    }));
+    document.querySelectorAll(".cli textarea").forEach((t) => { t.style.height = "auto"; t.style.height = t.scrollHeight + 4 + "px"; });
+    a.mensagens.forEach((m, i) => { if (m.acoes) carregarContatos(i); });
     $("#enviar").addEventListener("click", enviar);
-    $("#acao").addEventListener("click", criarAcao);
     $("#ia").addEventListener("click", reescrever);
     const rm = $("#remover"); if (rm) rm.addEventListener("click", remover);
+  }
+
+
+  // ---- B2B: um cartão por cliente, com contato e mensagens prontas ----
+  const num0 = (v) => Math.round(v).toLocaleString("pt-BR");
+  function cartoes(m, i) {
+    const porV = {};
+    m.acoes.forEach((x, j) => { (porV[x.vendedor] ||= []).push([x, j]); });
+    const reat = m.acoes.filter((x) => x.tipo === "reativar").length, inc = m.acoes.length - reat;
+    const total = m.acoes.reduce((t, x) => t + x.valorPedido, 0), un = m.acoes.reduce((t, x) => t + x.quantidade, 0);
+    return `<div class="resumo-b2b"><span>${m.acoes.length} cliente${m.acoes.length > 1 ? "s" : ""}</span><span>${reat} reativar</span><span>${inc} incluir no próximo pedido</span><span>${num0(un)} un</span><span>${brl(total)}</span><span>validade ${esc(m.acoes[0].validade)}</span></div>
+      <div class="note" id="ctResumo-${i}">Buscando contatos no Data Mart...</div>` +
+      Object.entries(porV).map(([vend, lista]) => {
+        const jv = m.porVendedor.findIndex((v) => v.vendedor === vend);
+        return `<div class="vend-h"><b>${esc(vend)}</b> · ${lista.length} cliente${lista.length > 1 ? "s" : ""}<button data-vend="${i}:${jv}">Copiar tudo de ${esc(vend.split(" ")[0])}</button></div>` +
+          `<div class="clis">` + lista.map(([x, j]) => `<div class="cli" id="cli-${i}-${j}">
+            <div class="top-c"><span class="pill ${x.tipo}">${x.tipo === "reativar" ? "REATIVAR" : "INCLUIR NO PRÓXIMO PEDIDO"}</span><b>${esc(x.cliente)}</b><span class="meta">${esc(x.cidade)}/${esc(x.uf)}</span></div>
+            <p>${esc(x.situacao)}</p>
+            <p><b>Oferta:</b> ${num0(x.quantidade)} un a ${brl(x.precoUn)} = ${brl(x.valorPedido)}. ${esc(x.condicao)}. Teste ${esc(x.braco)}, tabela ${esc(x.faixa)}. Validade ${esc(x.validade)}.</p>
+            ${x.aviso ? `<p class="aviso">${esc(x.aviso)}</p>` : ""}
+            <p class="ct" id="ct-${i}-${j}"><b>Contato:</b> <span>buscando...</span></p>
+            <b style="font-size:.8rem">WhatsApp pronto</b>
+            <textarea readonly rows="5" id="wa-txt-${i}-${j}">${esc(x.whatsapp)}</textarea>
+            <div class="acts"><button data-cc="${i}:${j}:wa">Copiar mensagem</button><a class="btnlink" id="wa-${i}-${j}" target="_blank" rel="noopener" hidden>Abrir no WhatsApp</a></div>
+            <details><summary>E-mail pronto</summary><p><b>Assunto:</b> ${esc(x.emailAssunto)}</p><pre>${esc(x.emailCorpo)}</pre>
+              <div class="acts"><button data-cc="${i}:${j}:em">Copiar e-mail</button><a class="btnlink" id="mail-${i}-${j}" hidden>Abrir no e-mail</a></div></details>
+          </div>`).join("") + `</div>`;
+      }).join("");
+  }
+
+  function pintarContato(i, j, c, motivo) {
+    const el = $(`#ct-${i}-${j}`); if (!el) return;
+    const x = atual.mensagens[i].acoes[j];
+    x.contato = c || null;
+    if (c) {
+      el.className = "ct";
+      el.innerHTML = `<b>Contato:</b> ${esc([c.telefone, c.email].filter(Boolean).join(" · "))} <span class="meta">(${esc(c.fonte)}; confirme antes de enviar)</span>`;
+      const d = (c.telefone || "").replace(/\D/g, "");
+      const wa = d.length === 10 || d.length === 11 ? "55" + d : d.length >= 12 && d.startsWith("55") ? d : "";
+      const a = $(`#wa-${i}-${j}`);
+      if (wa) { a.href = `https://wa.me/${wa}?text=${encodeURIComponent(x.whatsapp)}`; a.hidden = false; }
+      const m = $(`#mail-${i}-${j}`);
+      if (c.email) { m.href = `mailto:${c.email}?subject=${encodeURIComponent(x.emailAssunto)}&body=${encodeURIComponent(x.emailCorpo)}`; m.hidden = false; }
+    } else {
+      el.className = "ct sem";
+      el.innerHTML = `<b>Contato:</b> sem contato na base do agente (${esc(motivo || "não consultado")}). Abra o cliente na Torre, na conta de ${esc(x.vendedor)}.`;
+    }
+  }
+
+  async function carregarContatos(i) {
+    const m = atual.mensagens[i], sku = atual.sku, resumo = $(`#ctResumo-${i}`);
+    try {
+      const r = await api("/api/b2b/contatos?sku=" + encodeURIComponent(sku));
+      if (atual.sku !== sku) return; // trocou de produto no meio
+      m.acoes.forEach((x, j) => { const c = r.contatos[x.cliente]; pintarContato(i, j, c && c.contato, c && c.motivo); });
+      resumo.className = "note ok";
+      resumo.textContent = `${r.resumo.com_contato} de ${r.resumo.clientes} clientes com contato. Fonte: ${r.fonte}${r.resumo.consultas_com_erro ? ` ${r.resumo.consultas_com_erro} consulta(s) falharam.` : ""}`;
+    } catch (e) {
+      if (atual.sku !== sku) return;
+      m.acoes.forEach((x, j) => pintarContato(i, j, null, e.message));
+      resumo.className = "note err"; resumo.textContent = "Contatos indisponíveis: " + e.message;
+    }
   }
 
   function msgCompleta(i) {
@@ -234,6 +314,29 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     try { await navigator.clipboard.writeText(txt); b.textContent = "Copiado"; }
     catch { const r = document.createRange(); r.selectNodeContents($("#pronto-" + b.dataset.copy)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Texto selecionado"; }
     setTimeout(() => (b.textContent = "Copiar"), 1800);
+  }
+
+  async function copiarTexto(b, txt) {
+    const rotulo = b.textContent;
+    try { await navigator.clipboard.writeText(txt); b.textContent = "Copiado"; }
+    catch { b.textContent = "Não foi possível copiar"; }
+    setTimeout(() => (b.textContent = rotulo), 1800);
+  }
+
+  // Lista B2B para o vendedor ou para subir no Gira: uma linha por cliente.
+  function baixarCsv(i) {
+    const linhas = [["vendedor", "grupo", "braco_teste", "cliente", "produto", "quantidade_sugerida", "mensagem", "link_enviado_em", "cliente_abriu", "pedido_aprovado", "valor_aprovado",
+      "cidade", "uf", "telefone", "email", "preco_un", "valor_pedido", "condicao", "validade", "assunto_email"]];
+    for (const x of atual.mensagens[i].acoes) {
+      linhas.push([x.vendedor, x.tipo === "reativar" ? "reativar" : "incluir no próximo pedido", x.braco, x.cliente, atual.produto, x.quantidade, x.whatsapp, "", "", "", "",
+        x.cidade, x.uf, x.contato?.telefone || "", x.contato?.email || "", x.precoUn, x.valorPedido, x.condicao, x.validade, x.emailAssunto]);
+    }
+    const csv = "﻿" + linhas.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `recompra-b2b-${atual.sku}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
   async function enviar() {
@@ -273,7 +376,7 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     $("#rodar").disabled = true;
     iniciarTimer();
     try {
-      dados = await api("/api/radar");
+      dados = await api("/api/radar?fonte=" + $("#fonte").value);
       renderRadar();
       abrir(abrirSku || (dados.emRisco[0] || dados.parados[0]).sku);
       pararTimer("Ações prontas em");
@@ -282,9 +385,10 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
   }
 
   $("#rodar").addEventListener("click", () => rodar());
+  $("#fonte").addEventListener("change", () => rodar());
   $("#formReal").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const campos = ["produto", "marca", "categoria", "situacao", "estoque_un", "custo_unit_brl", "preco_cheio_brl", "venda_media_30d_un", "venda_30d_anteriores_un", "po_pendente_un"];
+    const campos = ["produto", "categoria", "estoque_un", "custo_unit_brl", "preco_cheio_brl", "venda_15d_un", "venda_15d_anteriores_un"];
     const body = Object.fromEntries(campos.map((c) => [c, $("#r-" + c).value]));
     const out = $("#realMsg");
     out.className = "note"; out.textContent = "Analisando...";
@@ -294,67 +398,6 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
       rodar(r.analise.sku);
     } catch (e) { out.className = "note err"; out.textContent = e.message; }
   });
-
-  // ---- Data Mart ao vivo ----
-  let linhasCarregadas = false;
-  async function carregarLinhas() {
-    const sel = $("#dm-linha"), msg = $("#dmMsg");
-    msg.className = "note"; msg.textContent = "Carregando linhas...";
-    try {
-      const r = await api("/api/linhas");
-      sel.innerHTML = '<option value="">Escolha uma linha</option>' + r.linhas.map((l) =>
-        `<option value="${esc(l.line)}">${esc(l.line)}${l.situacao === "descontinuado" ? " (descontinuada)" : ""} · ${l.estoque_un.toLocaleString("pt-BR")} un</option>`).join("");
-      msg.textContent = "Estoque de " + r.estoque_referencia + ".";
-      linhasCarregadas = true;
-    } catch (e) { sel.innerHTML = '<option value="">Indisponível</option>'; msg.className = "note err"; msg.textContent = e.message; }
-  }
-  const setv = (id, v) => { $("#r-" + id).value = v == null ? "" : String(v).replace(".", ","); };
-  async function puxarLinha() {
-    const linha = $("#dm-linha").value, msg = $("#dmMsg");
-    if (!linha) { msg.className = "note err"; msg.textContent = "Escolha uma linha."; return; }
-    msg.className = "note"; msg.textContent = "Buscando no Data Mart...";
-    try {
-      const d = await api("/api/datamart/linha?linha=" + encodeURIComponent(linha));
-      $("#r-produto").value = d.linha;
-      $("#r-situacao").value = d.situacao;
-      setv("estoque_un", d.estoque_un); setv("custo_unit_brl", d.custo_unit_brl); setv("preco_cheio_brl", d.preco_medio_brl);
-      setv("venda_media_30d_un", d.venda_30d_un); setv("venda_30d_anteriores_un", d.venda_30d_anteriores_un);
-      setv("po_pendente_un", d.po_pendente_un > 0 ? d.po_pendente_un : "");
-      msg.className = d.defasagem_vendas_dias > 14 ? "note err" : "note ok";
-      msg.textContent = "Preenchido. " + d.aviso + " Confira e clique em Analisar.";
-    } catch (e) { msg.className = "note err"; msg.textContent = e.message; }
-  }
-  $("#realBox").addEventListener("toggle", () => { if ($("#realBox").open && !linhasCarregadas) carregarLinhas(); });
-  $("#dm-puxar").addEventListener("click", puxarLinha);
-
-  // ---- Ações para afiliadas (primeira solução) ----
-  async function criarAcao() {
-    const out = $("#acaoMsg");
-    out.textContent = "Criando...";
-    try {
-      const r = await api("/api/acoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: atual.sku }) });
-      out.textContent = r.ja_existia ? `Já existe a ação #${r.id} aberta para este produto.` : `Ação #${r.id} criada.`;
-      carregarAcoes();
-    } catch (e) { out.textContent = e.message; }
-  }
-  async function carregarAcoes() {
-    const box = $("#acoesLista");
-    try {
-      const r = await api("/api/acoes");
-      box.innerHTML = r.acoes.length ? r.acoes.map((x) => `
-        <div class="acao"><b>#${x.id} · ${esc(x.produto)} · ${esc(x.status)}</b>
-          <span>${esc(x.oque_fazer)}</span>
-          <small>Criada em ${esc(String(x.criada_em).slice(0, 16))} por ${esc(x.criada_por || "")} · cobertura ${esc(x.baseline.cobertura_dias ?? "?")} d, estoque ${esc(x.baseline.estoque_un ?? "?")} un${x.nota ? " · " + esc(x.nota) : ""}</small>
-          ${x.status === "aberta" ? `<span><button data-fechar="${x.id}">Fechar ação</button></span>` : ""}
-        </div>`).join("") : '<p class="note">Nenhuma ação criada ainda.</p>';
-      box.querySelectorAll("[data-fechar]").forEach((b) => b.addEventListener("click", async () => {
-        const nota = prompt("Resultado medido (unidades vendidas por cupom, cobertura depois):") || "";
-        await api("/api/acoes/fechar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: +b.dataset.fechar, nota }) });
-        carregarAcoes();
-      }));
-    } catch (e) { box.innerHTML = `<p class="note err">${esc(e.message)}</p>`; }
-  }
-  $("#acoesBox").addEventListener("toggle", () => { if ($("#acoesBox").open) carregarAcoes(); });
   carregarStatus();
 })();
 </script>

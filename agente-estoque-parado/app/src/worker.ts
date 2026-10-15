@@ -3,22 +3,19 @@
 // POST /api/produtos         cadastra um produto real para o teste (fica no env.DB)
 // POST /api/enviar           envia as mensagens escolhidas para o Google Chat (env.CHAT_WEBHOOK_URL)
 // POST /api/ia               reescreve os textos de Growth com o AI Proxy (env.AI_PROXY_KEY), se configurado
-// GET  /api/linhas           linhas Gocase com estoque no Data Mart (ao vivo, pelo proxy do GoDeploy)
-// GET  /api/datamart/linha   estoque, custo, preço, venda 30d/30d anteriores e PO de uma linha, do Data Mart
-// GET  /api/acoes            ações para afiliadas já criadas (primeira solução do agente)
-// POST /api/acoes            cria a ação para afiliadas de um produto { sku }
-// POST /api/acoes/fechar     fecha uma ação { id, nota }
+// GET  /api/b2b/contatos     contato dos clientes B2B de um produto, ao vivo do Data Mart (Tiny)
 // GET  /api/status           o que está configurado
 import { DATA } from "./data";
+import { REAIS_GOCASE, REAIS_INFO, REAIS_GOBEAUTE, REAIS_GOBEAUTE_INFO, REAIS_GOBEAUTE_B2C, REAIS_GOBEAUTE_B2C_INFO } from "./reais";
 import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
-import { INFLUENCIA } from "./influencia";
+import { buscarContatos, ErroAcesso, type LinhaTiny } from "./contatos";
 
 type Env = {
   DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
   CHAT_WEBHOOK_URL?: string;
   AI_PROXY_KEY?: string;
   AI_MODEL?: string;
-  PROXY_BASE_URL?: string;
+  PROXY_BASE_URL?: string; // proxy de dados do GoDeploy (Data Mart, somente leitura)
 };
 
 const json = (body: unknown, status = 200) =>
@@ -28,15 +25,20 @@ async function setup(env: Env) {
   await env.DB.exec(
     `CREATE TABLE IF NOT EXISTS produtos_reais (sku TEXT PRIMARY KEY, dados TEXT NOT NULL, criado_por TEXT, criado_em TEXT DEFAULT (datetime('now')))`, []);
   await env.DB.exec(
-    `CREATE TABLE IF NOT EXISTS acoes (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT NOT NULL, produto TEXT, time TEXT DEFAULT 'Influência', oque_fazer TEXT, pronto TEXT, baseline TEXT, status TEXT DEFAULT 'aberta', nota TEXT, criada_por TEXT, criada_em TEXT DEFAULT (datetime('now')), fechada_por TEXT, fechada_em TEXT)`, []);
-  await env.DB.exec(
     `CREATE TABLE IF NOT EXISTS envios (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT, time TEXT, ok INTEGER, enviado_por TEXT, enviado_em TEXT DEFAULT (datetime('now')))`, []);
 }
 
-async function base(env: Env): Promise<Base> {
+// fonte "ficticia": base do hackathon com clientes fictícios. fonte "real": dados reais da Gocase, sem clientes.
+// Sem fonte (envio e IA): as duas juntas, para achar qualquer SKU.
+async function base(env: Env, fonte?: string): Promise<Base> {
   const r = await env.DB.query(`SELECT dados FROM produtos_reais ORDER BY criado_em DESC`, []);
-  const reais = r.rows.map(x => JSON.parse(String(x.dados)) as Produto);
-  return { produtos: [...reais, ...(DATA.produtos as unknown as Produto[])], clientes: DATA.clientes as never, pedidos: DATA.pedidos as never };
+  const cadastrados = r.rows.map(x => JSON.parse(String(x.dados)) as Produto);
+  const ficticios = DATA.produtos as unknown as Produto[];
+  if (fonte === "real") return { produtos: [...cadastrados, ...REAIS_GOCASE], clientes: [], pedidos: [] };
+  if (fonte === "gobeaute") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE], clientes: [], pedidos: [] };
+  if (fonte === "b2c") return { produtos: [...cadastrados, ...REAIS_GOBEAUTE_B2C], clientes: [], pedidos: [] };
+  const produtos = fonte === "ficticia" ? [...cadastrados, ...ficticios] : [...cadastrados, ...REAIS_GOCASE, ...REAIS_GOBEAUTE, ...REAIS_GOBEAUTE_B2C, ...ficticios];
+  return { produtos, clientes: DATA.clientes as never, pedidos: DATA.pedidos as never };
 }
 
 function num(v: unknown): number {
@@ -44,6 +46,16 @@ function num(v: unknown): number {
   if (!t) return NaN;
   const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
   return Number.isFinite(n) ? n : NaN;
+}
+
+// Leitura do Data Mart pelo proxy do GoDeploy, com o login de quem usa o app (a permissão é dele, não do app).
+async function pg(env: Env, request: Request, tabela: string, query: string): Promise<LinhaTiny[]> {
+  if (!env.PROXY_BASE_URL) throw new ErroAcesso("Proxy de dados não configurado neste ambiente.");
+  const r = await fetch(`${env.PROXY_BASE_URL}/datamart/api.${tabela}?${query}`, { headers: { Cookie: request.headers.get("Cookie") ?? "" } });
+  if (r.status === 401) throw new ErroAcesso("Sem login para o Data Mart. Abra o app logado.");
+  if (r.status === 403) throw new ErroAcesso("Você não tem permissão de leitura no Data Mart. Peça o acesso no console do GoDeploy.");
+  if (!r.ok) throw new Error(`Data Mart respondeu ${r.status}`);
+  return await r.json() as LinhaTiny[];
 }
 
 async function reescreverComIA(env: Env, a: ReturnType<typeof analisar>) {
@@ -62,84 +74,6 @@ async function reescreverComIA(env: Env, a: ReturnType<typeof analisar>) {
   return JSON.parse(m[0]) as { whatsapp: string; email: string; sms: string };
 }
 
-
-// ---- Data Mart ao vivo (PostgREST pelo proxy do GoDeploy, somente leitura, com o login de quem usa o app) ----
-async function pg(env: Env, request: Request, path: string): Promise<Record<string, unknown>[]> {
-  if (!env.PROXY_BASE_URL) throw new Error("Proxy de dados não configurado neste ambiente.");
-  const r = await fetch(`${env.PROXY_BASE_URL}/datamart/${path}`, { headers: { Cookie: request.headers.get("Cookie") ?? "" } });
-  if (r.status === 401) throw new Error("Sem login para o Data Mart. Abra o app logado.");
-  if (r.status === 403) throw new Error("Você não tem acesso ao Data Mart (peça a permissão de leitura no console do GoDeploy).");
-  if (!r.ok) throw new Error(`Data Mart respondeu ${r.status}: ${(await r.text()).slice(0, 160)}`);
-  return await r.json() as Record<string, unknown>[];
-}
-async function pgTodas(env: Env, request: Request, path: string, max = 30): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = [];
-  for (let i = 0; i < max; i++) {
-    const pagina = await pg(env, request, `${path}&limit=1000&offset=${i * 1000}`);
-    out.push(...pagina);
-    if (pagina.length < 1000) break;
-  }
-  return out;
-}
-const dia = (d: string, k: number) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + k); return t.toISOString().slice(0, 10); };
-const n0 = (v: unknown) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
-
-// Estoque do dia 1 do mês da última carga de supply_fluxo_estoque (é o retrato real mais recente da tabela).
-async function referenciaEstoque(env: Env, request: Request) {
-  const [u] = await pg(env, request, `api.supply_fluxo_estoque?select=loaded_at&order=loaded_at.desc&limit=1`);
-  const carregado = String(u?.loaded_at ?? "");
-  if (!carregado) throw new Error("Data Mart sem dados em supply_fluxo_estoque.");
-  return { ano: Number(carregado.slice(0, 4)), mes: Number(carregado.slice(5, 7)), carregado_em: carregado.slice(0, 10) };
-}
-
-async function listarLinhas(env: Env, request: Request) {
-  const ref = await referenciaEstoque(env, request);
-  const rows = await pg(env, request,
-    `api.supply_fluxo_estoque?select=line,item_status,day1_stock,unit_cost,day1_value_brl&year=eq.${ref.ano}&month=eq.${ref.mes}&day1_stock=gt.0&order=day1_value_brl.desc.nullslast&limit=300`);
-  return {
-    estoque_referencia: `${String(ref.mes).padStart(2, "0")}/${ref.ano} (dia 1), carga de ${ref.carregado_em}`,
-    linhas: rows.map(r => ({
-      line: String(r.line), situacao: String(r.item_status) === "Descontinuado" ? "descontinuado" : "linha",
-      estoque_un: n0(r.day1_stock), custo_unit_brl: n0(r.unit_cost), valor_custo_brl: Math.round(n0(r.day1_value_brl)),
-    })),
-  };
-}
-
-async function dadosDaLinha(env: Env, request: Request, linha: string) {
-  const ref = await referenciaEstoque(env, request);
-  const q = encodeURIComponent(linha);
-  const est = await pg(env, request,
-    `api.supply_fluxo_estoque?select=item_status,day1_stock,unit_cost,po_pending&year=eq.${ref.ano}&month=eq.${ref.mes}&line=eq.${q}`);
-  if (!est.length) throw new Error(`Linha "${linha}" não encontrada no estoque do Data Mart.`);
-  const [ult] = await pg(env, request, `api.supply_sales?select=sale_date&order=sale_date.desc&limit=1`);
-  const fim = String(ult?.sale_date ?? "").slice(0, 10);
-  if (!fim) throw new Error("Data Mart sem vendas em supply_sales.");
-  const ini30 = dia(fim, -29), fimAnt = dia(fim, -30), iniAnt = dia(fim, -59);
-  const vendas = await pgTodas(env, request,
-    `api.supply_sales?select=sale_date,sales_quantity,invoicing&line=eq.${q}&sale_date=gte.${iniAnt}&sale_date=lte.${fim}&order=id.asc`);
-  let q30 = 0, fat30 = 0, qAnt = 0;
-  for (const v of vendas) {
-    const d = String(v.sale_date).slice(0, 10);
-    if (d >= ini30) { q30 += n0(v.sales_quantity); fat30 += n0(v.invoicing); }
-    else if (d <= fimAnt) qAnt += n0(v.sales_quantity);
-  }
-  const estoque = est.reduce((s, r) => s + n0(r.day1_stock), 0);
-  const po = est.reduce((s, r) => s + n0(r.po_pending), 0);
-  const custo = n0(est[0].unit_cost);
-  const defas = Math.round((Date.now() - new Date(fim + "T00:00:00Z").getTime()) / 86400000);
-  return {
-    linha, situacao: String(est[0].item_status) === "Descontinuado" ? "descontinuado" : "linha",
-    estoque_un: estoque, custo_unit_brl: Math.round(custo * 100) / 100,
-    preco_medio_brl: q30 > 0 ? Math.round((fat30 / q30) * 100) / 100 : null,
-    venda_30d_un: q30, venda_30d_anteriores_un: qAnt, po_pendente_un: po,
-    janela: { de: ini30, ate: fim, anterior_de: iniAnt, anterior_ate: fimAnt },
-    estoque_referencia: `${String(ref.mes).padStart(2, "0")}/${ref.ano} (dia 1), carga de ${ref.carregado_em}`,
-    defasagem_vendas_dias: defas,
-    aviso: `Vendas até ${fim.split("-").reverse().join("/")} (${defas} dias atrás). O preço médio é o realizado, já líquido de desconto: use como piso do preço cheio.`,
-  };
-}
-
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -153,53 +87,27 @@ export default {
 
       if (url.pathname === "/api/radar" && request.method === "GET") {
         const t0 = Date.now();
-        const r = radar(await base(env));
-        return json({ ...r, ms: Date.now() - t0 });
+        const pedida = url.searchParams.get("fonte");
+        const fonte = pedida === "real" || pedida === "gobeaute" || pedida === "b2c" ? pedida : "ficticia";
+        const r = radar(await base(env, fonte));
+        return json({ ...r, fonte, info: fonte === "real" ? REAIS_INFO : fonte === "gobeaute" ? REAIS_GOBEAUTE_INFO : fonte === "b2c" ? REAIS_GOBEAUTE_B2C_INFO : "Base fictícia do hackathon.", ms: Date.now() - t0 });
       }
 
-      if (url.pathname === "/api/acoes" && request.method === "GET") {
-        const r = await env.DB.query(`SELECT id, sku, produto, time, oque_fazer, status, nota, baseline, criada_por, criada_em, fechada_em FROM acoes ORDER BY id DESC LIMIT 50`, []);
-        return json({ acoes: r.rows.map(x => ({ ...x, baseline: JSON.parse(String(x.baseline || "{}")) })) });
-      }
-
-      if (url.pathname === "/api/acoes" && request.method === "POST") {
-        const { sku } = await request.json() as { sku: string };
+      if (url.pathname === "/api/b2b/contatos" && request.method === "GET") {
+        const sku = url.searchParams.get("sku") ?? "";
         const bs = await base(env);
         const p = bs.produtos.find(x => x.sku === sku);
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
-        const aberta = await env.DB.query(`SELECT id FROM acoes WHERE sku = ? AND status = 'aberta' ORDER BY id DESC LIMIT 1`, [sku]);
-        if (aberta.rows.length) return json({ ok: true, id: aberta.rows[0].id, ja_existia: true });
-        const a = analisar(p, bs);
-        const m = a.mensagens[0]; // primeira solução = afiliadas
-        const baseline = JSON.stringify({
-          data: new Date().toISOString().slice(0, 10), cobertura_dias: a.coberturaDias, estoque_un: p.estoque_un,
-          venda_30d_un: p.venda_media_30d_un, po_pendente_un: p.po_pendente_un ?? 0, valor_estoque_brl: a.valorEstoque,
-          fonte: "projeto de afiliados: GoCreators e InfluHub/Inbazz " + INFLUENCIA.coletado_em,
-        });
-        await env.DB.exec(`INSERT INTO acoes (sku, produto, time, oque_fazer, pronto, baseline, criada_por) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [sku, p.produto, m.time, m.oQueFazer, m.pronto, baseline, quem]);
-        const novo = await env.DB.query(`SELECT id FROM acoes WHERE sku = ? ORDER BY id DESC LIMIT 1`, [sku]);
-        return json({ ok: true, id: novo.rows[0]?.id, ja_existia: false, oque_fazer: m.oQueFazer });
-      }
-
-      if (url.pathname === "/api/acoes/fechar" && request.method === "POST") {
-        const { id, nota } = await request.json() as { id: number; nota?: string };
-        await env.DB.exec(`UPDATE acoes SET status = 'fechada', nota = ?, fechada_por = ?, fechada_em = datetime('now') WHERE id = ?`, [String(nota ?? "").slice(0, 500), quem, id]);
-        return json({ ok: true });
-      }
-
-      if (url.pathname === "/api/linhas" && request.method === "GET") {
-        return json(await listarLinhas(env, request));
-      }
-
-      if (url.pathname === "/api/datamart/linha" && request.method === "GET") {
-        const linha = url.searchParams.get("linha") ?? "";
-        if (!linha) return json({ erro: "Informe a linha" }, 400);
-        return json(await dadosDaLinha(env, request, linha));
-      }
-
-      if (url.pathname === "/api/influencia" && request.method === "GET") {
-        return json(INFLUENCIA);
+        const acoes = analisar(p, bs).mensagens.find(m => m.time === "B2B")?.acoes ?? [];
+        try {
+          const { resultados, falhas } = await buscarContatos((t, q) => pg(env, request, t, q), acoes.map(a => a.cliente));
+          const achou = Object.values(resultados).filter(r => r.contato).length;
+          return json({ contatos: resultados, resumo: { clientes: Object.keys(resultados).length, com_contato: achou, consultas_com_erro: falhas },
+            fonte: "Tiny, pedidos de atacado (Data Mart). A Torre tem os demais clientes: abra pelo vendedor." });
+        } catch (e) {
+          if (e instanceof ErroAcesso) return json({ erro: e.message, sem_acesso: true }, 403);
+          throw e;
+        }
       }
 
       if (url.pathname === "/api/produtos" && request.method === "POST") {
@@ -210,18 +118,13 @@ export default {
           categoria: String(b.categoria ?? "Copos e garrafas"),
           status: "real",
           estoque_un: num(b.estoque_un), custo_unit_brl: num(b.custo_unit_brl), preco_cheio_brl: num(b.preco_cheio_brl),
-          venda_media_30d_un: num(b.venda_media_30d_un), venda_30d_anteriores_un: num(b.venda_30d_anteriores_un),
+          venda_15d_un: num(b.venda_15d_un), venda_15d_anteriores_un: num(b.venda_15d_anteriores_un),
         };
         const positivos = ["estoque_un", "custo_unit_brl", "preco_cheio_brl"];
         const faltando = Object.entries(p)
           .filter(([k, v]) => v === "" || (typeof v === "number" && !(positivos.includes(k) ? v > 0 : v >= 0)))
           .map(([k]) => k);
         if (faltando.length) return json({ erro: `Preencha: ${faltando.join(", ")}` }, 400);
-        const marca = String(b.marca ?? "Gocase");
-        p.marca = marca === "Gocase" || marca in INFLUENCIA.marcas ? marca : "Gocase";
-        p.situacao = b.situacao === "descontinuado" ? "descontinuado" : "linha";
-        const po = num(b.po_pendente_un);
-        if (Number.isFinite(po) && po > 0) p.po_pendente_un = po;
         await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
         return json({ ok: true, analise: analisar(p, await base(env)) });
       }

@@ -1,9 +1,9 @@
 // Formato "Postou e vendeu? Ganhou!", mensagem às afiliadas sem estoque, meta de unidades por tier e ações registradas.
 // Banco: SQLite real em memória. Produtos: os reais do Data Mart usados nos outros testes.
 import { Database } from "bun:sqlite";
-import worker from "../app/src/worker";
-import { DATA } from "../app/src/data";
-import * as A from "../app/src/agente";
+import worker from "../app-v2-influencia/src/worker";
+import { DATA } from "../app-v2-influencia/src/data";
+import * as A from "../app-v2-influencia/src/agente";
 
 const sqlite = new Database(":memory:");
 const DB = { exec: async (s: string, p: unknown[]) => { sqlite.query(s).run(...(p as any[])); return {}; }, query: async (s: string, p: unknown[]) => ({ rows: sqlite.query(s).all(...(p as any[])) as any[] }) };
