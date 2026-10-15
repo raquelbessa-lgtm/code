@@ -1,0 +1,121 @@
+{
+ "Mini Tote": {
+  "un_30d": 656,
+  "un_ant": 155,
+  "receita_30d": 124684,
+  "afiliadas_max": 125,
+  "estampas": 8
+ },
+ "Tote Bag Daily": {
+  "un_30d": 599,
+  "un_ant": 177,
+  "receita_30d": 119032,
+  "afiliadas_max": 103,
+  "estampas": 7
+ },
+ "Garrafa Fresh": {
+  "un_30d": 727,
+  "un_ant": 214,
+  "receita_30d": 114045,
+  "afiliadas_max": 85,
+  "estampas": 16
+ },
+ "Bolsa Moove": {
+  "un_30d": 590,
+  "un_ant": 156,
+  "receita_30d": 101588,
+  "afiliadas_max": 87,
+  "estampas": 11
+ },
+ "Bolsa Joy": {
+  "un_30d": 349,
+  "un_ant": 124,
+  "receita_30d": 95335,
+  "afiliadas_max": 57,
+  "estampas": 8
+ },
+ "Garrafa Flip Pro": {
+  "un_30d": 248,
+  "un_ant": 41,
+  "receita_30d": 41125,
+  "afiliadas_max": 57,
+  "estampas": 5
+ },
+ "Tote Puff": {
+  "un_30d": 153,
+  "un_ant": 41,
+  "receita_30d": 41850,
+  "afiliadas_max": 47,
+  "estampas": 5
+ },
+ "Mala Trip": {
+  "un_30d": 172,
+  "un_ant": 39,
+  "receita_30d": 74589,
+  "afiliadas_max": 32,
+  "estampas": 9
+ },
+ "Tote Moon Puffer": {
+  "un_30d": 158,
+  "un_ant": 11,
+  "receita_30d": 29003,
+  "afiliadas_max": 50,
+  "estampas": 3
+ },
+ "Tote Pop": {
+  "un_30d": 97,
+  "un_ant": 19,
+  "receita_30d": 16199,
+  "afiliadas_max": 42,
+  "estampas": 2
+ },
+ "Garrafa Urban": {
+  "un_30d": 478,
+  "un_ant": 42,
+  "receita_30d": 42943,
+  "afiliadas_max": 38,
+  "estampas": 6
+ },
+ "Bolsa Essential": {
+  "un_30d": 102,
+  "un_ant": 33,
+  "receita_30d": 20815,
+  "afiliadas_max": 36,
+  "estampas": 3
+ },
+ "Mochila Voyage": {
+  "un_30d": 45,
+  "un_ant": 13,
+  "receita_30d": 16375,
+  "afiliadas_max": 19,
+  "estampas": 3
+ },
+ "Copo Life": {
+  "un_30d": 181,
+  "un_ant": 43,
+  "receita_30d": 27596,
+  "afiliadas_max": 35,
+  "estampas": 5
+ },
+ "Necessaire": {
+  "un_30d": 290,
+  "un_ant": 75,
+  "receita_30d": 14550,
+  "afiliadas_max": 48,
+  "estampas": 3
+ },
+ "Lancheira/Bolsa térmica": {
+  "un_30d": 150,
+  "un_ant": 28,
+  "receita_30d": 21110,
+  "afiliadas_max": 31,
+  "estampas": 4
+ },
+ "Garrafa Mini": {
+  "un_30d": 32,
+  "un_ant": 10,
+  "receita_30d": 3907,
+  "afiliadas_max": 23,
+  "estampas": 1
+ }
+}

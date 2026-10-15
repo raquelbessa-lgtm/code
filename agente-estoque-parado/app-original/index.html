@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agente de Estoque Parado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
+<style>
+/* Visual gogroup: azul protagonista, lima para o que pede ação, off-white para leitura */
+:root {
+  --azul: #2659A5; --lima: #D7D900; --off: #F5F0E8; --branco: #FFFFFF;
+  --tinta: #1F2A44; --suave: #5A6680; --linha: #D9D3C7; --verm: #E5381A; --laranja: #F8AE13;
+  --fonte: "Poppins", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--azul); color: var(--tinta); font: 15px/1.5 var(--fonte); padding: 0 16px; padding-block: 20px 40px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; color: var(--branco); }
+header h1 { margin: 0 auto 0 0; font-size: 1.5rem; font-weight: 700; }
+header h1 small { display: block; font-size: .85rem; font-weight: 400; opacity: .85; }
+.chip { font-size: .8rem; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.15); }
+.chip.on { background: var(--lima); color: var(--azul); font-weight: 600; }
+button { font: 600 .9rem var(--fonte); border-radius: 999px; padding: 8px 16px; cursor: pointer; border: 2px solid var(--azul); background: var(--branco); color: var(--azul); }
+button:hover { background: var(--off); }
+button.go { background: var(--lima); border-color: var(--lima); color: var(--azul); font-size: 1rem; padding: 10px 22px; }
+button.go:hover { filter: brightness(.95); }
+button.prim { background: var(--azul); color: var(--branco); }
+button:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 3px solid var(--lima); outline-offset: 2px; }
+.timer { font-variant-numeric: tabular-nums; font-weight: 700; background: var(--branco); color: var(--azul); border-radius: 999px; padding: 8px 14px; }
+main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: start; }
+.panel { background: var(--off); border-radius: 22px; padding: 20px; min-width: 0; }
+.panel h2 { margin: 0 0 4px; font-size: 1.05rem; color: var(--azul); }
+.panel p.help { margin: 0 0 10px; color: var(--suave); font-size: .85rem; }
+.list { display: grid; gap: 8px; margin-bottom: 18px; }
+.item { text-align: left; border-radius: 14px; border: 2px solid transparent; background: var(--branco); padding: 10px 12px; display: grid; gap: 2px; font-weight: 500; color: var(--tinta); }
+.item b { font-weight: 600; }
+.item .why { font-size: .82rem; color: var(--suave); font-weight: 400; }
+.item.risco .why { color: var(--verm); }
+.item[aria-current="true"] { border-color: var(--azul); }
+.item:hover { background: var(--branco); border-color: var(--linha); }
+.empty { color: var(--suave); font-size: .9rem; }
+.head-prod { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 4px; }
+.head-prod h2 { font-size: 1.35rem; }
+.tag { font-size: .78rem; font-weight: 600; border-radius: 999px; padding: 2px 10px; background: var(--azul); color: var(--branco); }
+.tag.risco { background: var(--laranja); color: var(--tinta); }
+.tag.real { background: var(--lima); color: var(--azul); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--suave); font-size: .88rem; margin-bottom: 14px; }
+.facts b { color: var(--tinta); }
+.msgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.msg { background: var(--branco); border-radius: 16px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.msg .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.msg h3 { margin: 0; font-size: 1rem; color: var(--azul); }
+.msg label { font-size: .8rem; color: var(--suave); display: flex; gap: 6px; align-items: center; }
+.msg dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: .88rem; }
+.msg dt { font-weight: 600; }
+.msg dd { margin: 0; min-width: 0; }
+.msg pre { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; font: .82rem/1.45 var(--fonte); background: var(--off); border-radius: 10px; padding: 10px; max-height: 220px; overflow: auto; }
+.msg .acts { display: flex; gap: 8px; }
+.msg .acts button { padding: 5px 12px; font-size: .8rem; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 0; }
+.note { font-size: .85rem; color: var(--suave); }
+.note.err { color: var(--verm); }
+.note.ok { color: var(--azul); font-weight: 600; }
+details { background: var(--off); border-radius: 22px; padding: 14px 20px; }
+summary { cursor: pointer; font-weight: 600; color: var(--azul); }
+form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; margin-top: 12px; }
+form label { display: grid; gap: 4px; font-size: .82rem; color: var(--suave); }
+form input, form select { font: .95rem var(--fonte); padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--linha); background: var(--branco); color: var(--tinta); }
+form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Agente de Estoque Parado <small>Acha o que parou ou está parando e entrega a ação pronta para o dono de cada time</small></h1>
+    <span class="chip" id="chipChat">Chat: não configurado</span>
+    <span class="chip" id="chipIA">IA: textos do agente</span>
+    <span class="timer" id="timer" aria-live="polite">0,0 s</span>
+    <button class="go" id="rodar">Rodar agente</button>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="t-radar">
+      <h2 id="t-radar">Radar</h2>
+      <p class="help">Clique em um produto para ver a ação de cada time.</p>
+      <div id="radar"><p class="empty">Clique em "Rodar agente" para começar.</p></div>
+    </section>
+
+    <section class="panel" id="detalhe" aria-live="polite">
+      <p class="empty">As ações por time aparecem aqui.</p>
+    </section>
+  </main>
+
+  <details id="realBox">
+    <summary>Testar com um produto real</summary>
+    <p class="note">Use números passados por Growth ou Supply. O produto entra no radar com a etiqueta "real" e fica salvo para o time.</p>
+    <form id="formReal">
+      <label>Produto<input id="r-produto" required placeholder="Copo Vibe Preto"></label>
+      <label>Categoria
+        <select id="r-categoria">
+          <option>Copos e garrafas</option><option>Capinhas</option><option>Bolsas</option><option>Acessórios</option><option>Pet</option>
+        </select>
+      </label>
+      <label>Estoque (unidades)<input id="r-estoque_un" inputmode="decimal" required></label>
+      <label>Custo por unidade (R$)<input id="r-custo_unit_brl" inputmode="decimal" required></label>
+      <label>Preço cheio (R$)<input id="r-preco_cheio_brl" inputmode="decimal" required></label>
+      <label>Venda últimos 30 dias (un)<input id="r-venda_media_30d_un" inputmode="decimal" required></label>
+      <label>Venda 30 dias anteriores (un)<input id="r-venda_30d_anteriores_un" inputmode="decimal" required></label>
+      <div class="full"><button class="prim" type="submit">Analisar produto real</button><span class="note" id="realMsg"></span></div>
+    </form>
+  </details>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  let dados = null, atual = null, status = { webhook: false, ia: false }, t0 = 0, tick = null;
+
+  function iniciarTimer() { t0 = performance.now(); clearInterval(tick); tick = setInterval(() => { $("#timer").textContent = ((performance.now() - t0) / 1000).toFixed(1).replace(".", ",") + " s"; }, 100); }
+  function pararTimer(rotulo) { clearInterval(tick); const s = ((performance.now() - t0) / 1000).toFixed(1).replace(".", ","); $("#timer").textContent = rotulo + " " + s + " s"; }
+
+  async function api(path, opts) {
+    const r = await fetch(path, opts);
+    const b = await r.json().catch(() => ({ erro: "Resposta inválida do servidor" }));
+    if (!r.ok) throw new Error(b.erro || "Erro " + r.status);
+    return b;
+  }
+
+  async function carregarStatus() {
+    try {
+      status = await api("/api/status");
+      $("#chipChat").textContent = status.webhook ? "Chat: conectado" : "Chat: não configurado";
+      $("#chipChat").classList.toggle("on", status.webhook);
+      $("#chipIA").textContent = status.ia ? "IA: AI Proxy" : "IA: textos do agente";
+      $("#chipIA").classList.toggle("on", status.ia);
+    } catch (e) {}
+  }
+
+  function item(a) {
+    const real = a.status === "real" ? ' <span class="tag real">real</span>' : "";
+    return `<button class="item ${a.classe === "em_risco" ? "risco" : ""}" data-sku="${esc(a.sku)}"><b>${esc(a.produto)}${real}</b><span class="why">${esc(a.motivo)}</span></button>`;
+  }
+
+  function renderRadar() {
+    const p = dados.parados, r = dados.emRisco;
+    $("#radar").innerHTML =
+      (dados.reais.length ? `<h2>Produto real em teste (${dados.reais.length})</h2><p class="help">Números passados pelo time.</p><div class="list">${dados.reais.map(item).join("")}</div>` : "") +
+      `<h2>Entrando em slow moving (${r.length})</h2><p class="help">Venda caindo rápido e estoque subindo. Dá para agir antes de parar.</p>` +
+      `<div class="list">${r.map(item).join("") || '<p class="empty">Nenhum agora.</p>'}</div>` +
+      `<h2>Parados (${p.length})</h2><p class="help">Do maior valor em estoque para o menor.</p>` +
+      `<div class="list">${p.map(item).join("")}</div>` +
+      (dados.saudaveis.length ? `<p class="help">Saudáveis, sem ação: ${esc(dados.saudaveis.join(", "))}</p>` : "");
+    document.querySelectorAll(".item").forEach((b) => b.addEventListener("click", () => abrir(b.dataset.sku)));
+  }
+
+  function todos() { return [...dados.reais, ...dados.emRisco, ...dados.parados]; }
+
+  function abrir(sku) {
+    atual = todos().find((a) => a.sku === sku);
+    if (!atual) return;
+    document.querySelectorAll(".item").forEach((b) => b.setAttribute("aria-current", String(b.dataset.sku === sku)));
+    const a = atual;
+    const tag = a.status === "real" ? `<span class="tag real">produto real, ${a.classe === "parado" ? "parado" : a.classe === "em_risco" ? "entrando em slow moving" : "saudável"}</span>` :a.classe === "em_risco" ? '<span class="tag risco">entrando em slow moving</span>' : '<span class="tag">parado</span>';
+    $("#detalhe").innerHTML = `
+      <div class="head-prod"><h2>${esc(a.produto)}</h2>${tag}</div>
+      <div class="facts">
+        <span>Por quê: <b>${esc(a.motivo)}</b></span>
+        <span>Oferta: <b>${esc(a.oferta.descricao)}</b></span>
+        <span>Preço mínimo com margem: <b>${brl(a.precoMinimo)}</b></span>
+      </div>
+      <div class="msgs">${a.mensagens.map((m, i) => `
+        <article class="msg">
+          <div class="top"><h3>${esc(m.time)}</h3><label><input type="checkbox" class="sel" value="${esc(m.time)}" checked> enviar</label></div>
+          <dl><dt>O que fazer</dt><dd>${esc(m.oQueFazer)}</dd><dt>Por quê</dt><dd>${esc(m.porque)}</dd><dt>Até quando</dt><dd>${esc(m.ateQuando)}</dd></dl>
+          <pre id="pronto-${i}">${esc(m.pronto)}</pre>
+          <div class="acts"><button data-copy="${i}">Copiar</button></div>
+        </article>`).join("")}
+      </div>
+      <div class="bar">
+        <button class="prim" id="enviar">Enviar para os times marcados</button>
+        <button id="ia">Reescrever textos de Growth com IA</button>
+        ${a.status === "real" ? '<button id="remover">Remover produto real</button>' : ""}
+        <span class="note" id="envioMsg"></span>
+      </div>`;
+    document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => copiar(b)));
+    $("#enviar").addEventListener("click", enviar);
+    $("#ia").addEventListener("click", reescrever);
+    const rm = $("#remover"); if (rm) rm.addEventListener("click", remover);
+  }
+
+  function msgCompleta(i) {
+    const m = atual.mensagens[i];
+    return `Agente de Estoque Parado → ${m.time}\nO que fazer: ${m.oQueFazer}\nPor quê: ${atual.produto}, ${m.porque}\nAté quando: ${m.ateQuando}\nPronto para usar:\n${$("#pronto-" + i).textContent}`;
+  }
+  async function copiar(b) {
+    const txt = msgCompleta(+b.dataset.copy);
+    try { await navigator.clipboard.writeText(txt); b.textContent = "Copiado"; }
+    catch { const r = document.createRange(); r.selectNodeContents($("#pronto-" + b.dataset.copy)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Texto selecionado"; }
+    setTimeout(() => (b.textContent = "Copiar"), 1800);
+  }
+
+  async function enviar() {
+    const times = [...document.querySelectorAll(".sel:checked")].map((c) => c.value);
+    const out = $("#envioMsg");
+    if (!times.length) { out.className = "note err"; out.textContent = "Marque pelo menos um time."; return; }
+    out.className = "note"; out.textContent = "Enviando...";
+    iniciarTimer();
+    try {
+      const r = await api("/api/enviar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: atual.sku, times }) });
+      pararTimer("Enviado em");
+      const ok = r.enviados.filter((e) => e.ok).length;
+      out.className = ok === r.enviados.length ? "note ok" : "note err";
+      out.textContent = `${ok} de ${r.enviados.length} mensagens entregues no Chat.`;
+    } catch (e) { pararTimer("Falhou em"); out.className = "note err"; out.textContent = e.message; }
+  }
+
+  async function reescrever() {
+    const out = $("#envioMsg");
+    out.className = "note"; out.textContent = "Pedindo à IA...";
+    try {
+      const r = await api("/api/ia", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: atual.sku }) });
+      const i = atual.mensagens.findIndex((m) => m.time === "Growth");
+      const oferta = "Oferta: " + atual.oferta.descricao;
+      $("#pronto-" + i).textContent = `${oferta}\n\nWhatsApp: ${r.whatsapp}\n\nE-mail: ${r.email}\n\nSMS: ${r.sms}`;
+      out.className = "note ok"; out.textContent = "Textos de Growth reescritos pela IA. Confira antes de enviar.";
+    } catch (e) { out.className = "note err"; out.textContent = e.message; }
+  }
+
+  async function remover() {
+    await api("/api/produtos?sku=" + encodeURIComponent(atual.sku), { method: "DELETE" });
+    $("#detalhe").innerHTML = '<p class="empty">Produto real removido.</p>';
+    rodar();
+  }
+
+  async function rodar(abrirSku) {
+    $("#rodar").disabled = true;
+    iniciarTimer();
+    try {
+      dados = await api("/api/radar");
+      renderRadar();
+      abrir(abrirSku || (dados.emRisco[0] || dados.parados[0]).sku);
+      pararTimer("Ações prontas em");
+    } catch (e) { pararTimer("Falhou em"); $("#radar").innerHTML = `<p class="note err">${esc(e.message)}</p>`; }
+    $("#rodar").disabled = false;
+  }
+
+  $("#rodar").addEventListener("click", () => rodar());
+  $("#formReal").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const campos = ["produto", "categoria", "estoque_un", "custo_unit_brl", "preco_cheio_brl", "venda_media_30d_un", "venda_30d_anteriores_un"];
+    const body = Object.fromEntries(campos.map((c) => [c, $("#r-" + c).value]));
+    const out = $("#realMsg");
+    out.className = "note"; out.textContent = "Analisando...";
+    try {
+      const r = await api("/api/produtos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      out.className = "note ok"; out.textContent = `Pronto: ${r.analise.produto} entrou no radar.`;
+      rodar(r.analise.sku);
+    } catch (e) { out.className = "note err"; out.textContent = e.message; }
+  });
+  carregarStatus();
+})();
+</script>
+</body>
+</html>
