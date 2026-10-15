@@ -61,7 +61,8 @@ p { margin: 0; }
 .capa { justify-content: space-between; padding-top: 4.4cqw; }
 .capa .projeto { font-size: 1.8cqw; font-weight: 600; color: var(--lima); letter-spacing: .02em; }
 .gigante { font-size: 22cqw; font-weight: 800; letter-spacing: -.06em; line-height: .82; color: var(--lima); font-variant-numeric: tabular-nums; }
-.capa .legenda { font-size: 3.4cqw; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; max-width: 22ch; color: var(--branco); margin-top: 1.4cqw; }
+.titulo-capa { font-size: 10.4cqw; line-height: .95; color: var(--branco); max-width: 12ch; margin-top: auto; margin-bottom: auto; }
+.legenda { font-size: 3.4cqw; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; max-width: 22ch; color: var(--branco); margin-top: 1.4cqw; }
 .time { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.4cqw; }
 .time li { border-top: .45cqw solid var(--lima); padding-top: 1.2cqw; display: grid; gap: .3cqw; }
 .time b { font-size: 1.6cqw; white-space: nowrap; font-weight: 700; letter-spacing: -.015em; line-height: 1.15; }
@@ -205,18 +206,20 @@ body.com-notas .notas { display: block; }
 <div class="palco" id="palco">
 
   <!-- 1 Abertura · 0:00 a 0:15 -->
-  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="“Sabe quantos dos nossos produtos Barbours estão parados? (pausa) Noventa e seis por cento. Na Gobeauté, são 5,1 milhões de reais parados. Somos o time do Agente Slow Moving B2B, e viemos transformar esse estoque em dinheiro.”">
-    <p class="projeto">GoHacks · Tema 4, Slow moving · Agente Slow Moving B2B</p>
-    <div>
-      <div class="gigante">96%</div>
-      <p class="legenda">dos Barbours de maior valor estão parados</p>
-    </div>
+  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="“Somos o time do Agente Slow Moving B2B: Wilkerson, Larissa, Raquel e Rafael.”">
+    <h1 class="titulo-capa">Agente Slow Moving B2B</h1>
     <ul class="time">
-      <li><b>Wilkerson Fernandes</b><span>DP</span></li>
-      <li><b>Larissa Queiroz</b><span>B2B</span></li>
-      <li><b>Raquel Bessa</b><span>Marketing de Influência</span></li>
-      <li><b>Rafael Craveiro</b><span>Operações B2B Gobeauté</span></li>
+      <li><b>Wilkerson Fernandes</b></li>
+      <li><b>Larissa Queiroz</b></li>
+      <li><b>Raquel Bessa</b></li>
+      <li><b>Rafael Craveiro</b></li>
     </ul>
+  </section>
+
+  <!-- 2 Abertura · 0:00 a 0:15 · o impacto em um número -->
+  <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:15" data-nota="“Sabe quantos dos nossos produtos Barbours estão parados? (pausa) Noventa e seis por cento. Na Gobeauté, são 5,1 milhões de reais parados. E a gente veio transformar esse estoque em dinheiro.”">
+    <div class="gigante">96%</div>
+    <p class="legenda">dos Barbours de maior valor estão parados</p>
   </section>
 
   <!-- 2 Dor · 0:15 a 0:50 (1/2) -->
@@ -232,8 +235,8 @@ body.com-notas .notas { display: block; }
         </div>
       </div>
       <div class="fato">
-        <div class="num">20 de 27</div>
-        <p>SKUs Barbours do topo do B2B têm estoque para mais de um ano</p>
+        <div class="num">74%</div>
+        <p>dos SKUs Barbours do topo do B2B (20 de 27) têm estoque para mais de um ano</p>
       </div>
     </div>
     <p class="nota">Fonte: Torre B2B, snapshot de 15/10/2026, SKUs Barbours entre os 40 de maior valor em estoque no B2B. Cobertura no ritmo de venda dos últimos 15 dias. 26 de 27 passam de 180 dias (96%).</p>
