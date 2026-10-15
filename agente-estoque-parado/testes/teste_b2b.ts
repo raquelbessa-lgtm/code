@@ -3,7 +3,8 @@
 import worker from "../app/src/worker";
 import { REAIS_GOBEAUTE } from "../app/src/reais";
 import * as A from "../app/src/agente";
-import { padraoIlike, escolherContato, limparCacheContatos, norm } from "../app/src/contatos";
+import { padraoIlike, escolherContato, limparCacheContatos, norm, contatoDaTorre } from "../app/src/contatos";
+import { TORRE } from "../app/src/contatos_torre";
 
 const ok = (c: boolean, m: string) => { console.log((c ? "ok   " : "FALHOU: ") + m); if (!c) process.exitCode = 1; };
 const hoje = new Date("2026-10-15T15:00:00Z");
@@ -50,8 +51,23 @@ ok(escolherContato("Saniella Ltda Me", [linhas[2]]).motivo?.includes("não encon
 ok(escolherContato("Saniella Ltda Me", [{ ...linhas[0] }, { ...linhas[0], cpf_cnpj_cliente: "99.999.999/0001-99" }]).motivo?.includes("mais de um cadastro"), "dois CNPJs com o mesmo nome: não chuta");
 ok(escolherContato("Saniella Ltda Me", [linhas[1]]).motivo?.includes("sem telefone nem e-mail"), "cadastro sem contato: diz o motivo");
 
-// 3) endpoint com Tiny falso
+// 2b) contato da Torre (snapshot): cobre quase todos, filial duplicada não é chutada, e-mail compartilhado vem com aviso
+const clientesTorre = new Set<string>();
+for (const p of REAIS_GOBEAUTE) for (const x of A.analisar(p as any, base, hoje).mensagens.find(m => m.time === "B2B")?.acoes ?? []) clientesTorre.add(x.cliente + "|" + x.uf);
+const resT = [...clientesTorre].map(k => { const [c, u] = k.split("|"); return { k, r: contatoDaTorre(c, u) }; });
+ok(resT.length >= 35, `${resT.length} clientes B2B distintos nos cartões`);
+const semT = resT.filter(x => !x.r);
+ok(semT.length === 0, `todo cliente dos cartões está no snapshot da Torre (faltam: ${semT.map(x => x.k).join(", ") || "nenhum"})`);
+const comTel = resT.filter(x => x.r?.contato?.telefone).length;
+ok(comTel >= 34, `${comTel} de ${resT.length} com telefone (WhatsApp validado)`);
+ok(resT.filter(x => !x.r?.contato).every(x => x.r?.motivo), "quem fica sem contato diz o motivo");
+ok(resT.some(x => x.r?.motivo?.includes("cadastros (filiais)")), "rede com várias filiais: não chuta loja");
+ok(resT.filter(x => x.r?.contato?.email).some(x => x.r?.contato?.aviso?.includes("compartilhada")), "e-mail repetido em clientes diferentes vem com aviso");
+ok(resT.every(x => !x.r?.contato?.telefone || /^55\d{10,11}$/.test(x.r.contato.telefone)), "telefones no formato 55 + DDD + número");
+
+// 3) endpoint com Tiny falso (sem o snapshot da Torre, para testar o caminho de fallback)
 const clientesReais = ex.m.acoes!.map(x => x.cliente);
+const TORRE_BKP = { ...TORRE }; for (const k of Object.keys(TORRE)) delete TORRE[k];
 let modo: "ok" | "401" | "403" | "500" = "ok"; const chamadas: string[] = [];
 (globalThis as any).fetch = async (u: string) => {
   chamadas.push(u); const url = new URL(u);
@@ -76,13 +92,19 @@ const n0 = chamadas.length; await get("/api/b2b/contatos?sku=" + sku);
 ok(chamadas.length === n0, "segunda chamada usa o cache (sem novas consultas)");
 limparCacheContatos(); modo = "403";
 const c403 = await get("/api/b2b/contatos?sku=" + sku);
-ok(c403.status === 403 && c403.body.sem_acesso === true && /permissão/.test(c403.body.erro), "sem permissão no Data Mart: erro claro, não 'cliente não encontrado'");
-modo = "401"; ok((await get("/api/b2b/contatos?sku=" + sku)).body.sem_acesso === true, "sem login: erro claro");
+ok(c403.status === 200 && c403.body.resumo.com_contato === 0 && Object.values(c403.body.contatos as Record<string, any>).every(r => /permissão/.test(r.motivo)), "sem permissão no Data Mart: cada cartão diz isso, não 'cliente não encontrado'");
+modo = "401"; ok(Object.values((await get("/api/b2b/contatos?sku=" + sku)).body.contatos as Record<string, any>).every(r => /login/.test(r.motivo)), "sem login: erro claro em cada cartão");
 modo = "500"; const c500 = await get("/api/b2b/contatos?sku=" + sku);
 ok(c500.status === 200 && c500.body.resumo.consultas_com_erro > 0 && c500.body.resumo.com_contato === 0, "Data Mart fora do ar: 200 com a contagem de falhas, sem inventar contato");
 ok((await get("/api/b2b/contatos?sku=NAO-EXISTE")).status === 404, "produto inexistente: 404");
 delete env.PROXY_BASE_URL; limparCacheContatos();
-ok((await get("/api/b2b/contatos?sku=" + sku)).status === 403, "sem proxy de dados configurado: erro claro");
+ok(Object.values((await get("/api/b2b/contatos?sku=" + sku)).body.contatos as Record<string, any>).every(r => /Proxy de dados/.test(r.motivo)), "sem proxy de dados configurado: erro claro em cada cartão");
+
+// 3b) com o snapshot da Torre de volta: o endpoint responde só com a Torre, sem consultar o Data Mart
+Object.assign(TORRE, TORRE_BKP); chamadas.length = 0; limparCacheContatos(); env.PROXY_BASE_URL = "https://proxy.test"; modo = "ok";
+const cT = await get("/api/b2b/contatos?sku=" + sku);
+ok(cT.status === 200 && cT.body.resumo.com_contato >= 1 && chamadas.length === 0, `endpoint com a Torre: ${cT.body.resumo?.com_contato} de ${cT.body.resumo?.clientes} com contato, sem consultar o Data Mart`);
+delete env.PROXY_BASE_URL; ok((await get("/api/b2b/contatos?sku=" + sku)).status === 200, "com a Torre, não depende do proxy de dados");
 
 // 4) nada mais quebrou: radar das 4 fontes
 env.PROXY_BASE_URL = "https://proxy.test";

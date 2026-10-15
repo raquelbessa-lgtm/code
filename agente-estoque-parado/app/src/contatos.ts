@@ -3,6 +3,7 @@
 // então o contato é "melhor esforço": quando não acha, o cartão diz o motivo e manda abrir o cliente na Torre. Nunca inventa contato.
 // Nada de telefone ou e-mail fica no código ou no banco do app: só passa por aqui na hora, para quem tem acesso ao Data Mart.
 import type { ContatoCliente } from "./agente";
+import { TORRE, TORRE_GERADO_EM } from "./contatos_torre";
 
 export const TABELAS_TINY = [
   "tiny_pedidos_apice_atacado_sp",
@@ -81,6 +82,16 @@ export async function buscarContatos(consulta: Consulta, nomes: string[]): Promi
     resultados[nome] = falhou && !r.contato ? { contato: null, motivo: "consulta ao Tiny falhou em alguma tabela: tente de novo" } : r;
   }));
   return { resultados, falhas };
+}
+
+// Contato da Torre (dim_cliente + contatos de WhatsApp validados), por nome normalizado + UF. Vem do arquivo gerado
+// por contatos/gerar_contatos_torre.py. Cliente com mais de uma filial no mesmo nome não recebe contato chutado.
+export function contatoDaTorre(cliente: string, uf: string): Resultado | null {
+  const t = TORRE[`${norm(cliente)}|${uf}`];
+  if (!t) return null;
+  if (t.motivo) return { contato: null, motivo: t.motivo };
+  const avisos = [t.emailAviso].filter(Boolean).join("; ");
+  return { contato: { telefone: t.telefone, email: t.email, fonte: `Torre B2B, base de ${TORRE_GERADO_EM}${t.email && t.emailFonte ? `; e-mail ${t.emailFonte}` : ""}`, aviso: avisos || undefined } };
 }
 
 export const limparCacheContatos = () => cache.clear();

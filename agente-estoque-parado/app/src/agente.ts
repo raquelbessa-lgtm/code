@@ -41,7 +41,7 @@ export type Base = { produtos: Produto[]; clientes: Cliente[]; pedidos: Pedido[]
 export type Classe = "parado" | "em_risco" | "saudavel" | "campeao";
 
 // Cartão de ação B2B: tudo que o vendedor precisa para agir em um cliente, sem ler texto corrido.
-export type ContatoCliente = { telefone?: string; email?: string; fonte: string };
+export type ContatoCliente = { telefone?: string; email?: string; fonte: string; aviso?: string };
 export type AcaoCliente = {
   tipo: "reativar" | "incluir";
   cliente: string; cidade: string; uf: string; vendedor: string;

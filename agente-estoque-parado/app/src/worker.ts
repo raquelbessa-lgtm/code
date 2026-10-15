@@ -8,7 +8,7 @@
 import { DATA } from "./data";
 import { REAIS_GOCASE, REAIS_INFO, REAIS_GOBEAUTE, REAIS_GOBEAUTE_INFO, REAIS_GOBEAUTE_B2C, REAIS_GOBEAUTE_B2C_INFO } from "./reais";
 import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
-import { buscarContatos, ErroAcesso, type LinhaTiny } from "./contatos";
+import { buscarContatos, contatoDaTorre, ErroAcesso, type LinhaTiny, type Resultado } from "./contatos";
 
 type Env = {
   DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
@@ -99,15 +99,20 @@ export default {
         const p = bs.produtos.find(x => x.sku === sku);
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
         const acoes = analisar(p, bs).mensagens.find(m => m.time === "B2B")?.acoes ?? [];
+        // Torre primeiro (cobre quase todos); o que ela não tiver cai para o Tiny ao vivo, com o login de quem usa.
+        const resultados: Record<string, Resultado> = {};
+        const faltam: string[] = [];
+        for (const a of acoes) { const t = contatoDaTorre(a.cliente, a.uf); if (t) resultados[a.cliente] = t; else faltam.push(a.cliente); }
+        let falhas = 0;
         try {
-          const { resultados, falhas } = await buscarContatos((t, q) => pg(env, request, t, q), acoes.map(a => a.cliente));
-          const achou = Object.values(resultados).filter(r => r.contato).length;
-          return json({ contatos: resultados, resumo: { clientes: Object.keys(resultados).length, com_contato: achou, consultas_com_erro: falhas },
-            fonte: "Tiny, pedidos de atacado (Data Mart). A Torre tem os demais clientes: abra pelo vendedor." });
+          if (faltam.length) { const r = await buscarContatos((t, q) => pg(env, request, t, q), faltam); Object.assign(resultados, r.resultados); falhas = r.falhas; }
         } catch (e) {
-          if (e instanceof ErroAcesso) return json({ erro: e.message, sem_acesso: true }, 403);
-          throw e;
+          if (!(e instanceof ErroAcesso)) throw e;
+          for (const n of faltam) resultados[n] = { contato: null, motivo: e.message };
         }
+        const achou = Object.values(resultados).filter(r => r.contato).length;
+        return json({ contatos: resultados, resumo: { clientes: Object.keys(resultados).length, com_contato: achou, consultas_com_erro: falhas },
+          fonte: "Torre B2B (cadastro e WhatsApp validado); Tiny para quem não está na Torre." });
       }
 
       if (url.pathname === "/api/produtos" && request.method === "POST") {

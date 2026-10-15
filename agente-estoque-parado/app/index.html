@@ -277,7 +277,7 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     x.contato = c || null;
     if (c) {
       el.className = "ct";
-      el.innerHTML = `<b>Contato:</b> ${esc([c.telefone, c.email].filter(Boolean).join(" · "))} <span class="meta">(${esc(c.fonte)}; confirme antes de enviar)</span>`;
+      el.innerHTML = `<b>Contato:</b> ${esc([c.telefone, c.email].filter(Boolean).join(" · "))} <span class="meta">(${esc(c.fonte)}; confirme antes de enviar)</span>${c.aviso ? ` <span class="meta">Atenção: ${esc(c.aviso)}.</span>` : ""}`;
       const d = (c.telefone || "").replace(/\D/g, "");
       const wa = d.length === 10 || d.length === 11 ? "55" + d : d.length >= 12 && d.startsWith("55") ? d : "";
       const a = $(`#wa-${i}-${j}`);
