@@ -52,6 +52,12 @@ main { display: grid; grid-template-columns: 360px 1fr; gap: 16px; align-items: 
 .msgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .msg { background: var(--branco); border-radius: 16px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
 .msg .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.msg.primeira { outline: 3px solid var(--lima); outline-offset: -3px; }
+.primeira-bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--azul); color: var(--branco); border-radius: 16px; padding: 10px 14px; margin: 0 0 12px; }
+.primeira-bar b { font-weight: 600; }
+.acoes { display: grid; gap: 8px; margin-top: 10px; }
+.acao { background: var(--branco); border-radius: 12px; padding: 8px 12px; font-size: .85rem; display: grid; gap: 2px; }
+.acao small { color: var(--suave); }
 .msg h3 { margin: 0; font-size: 1rem; color: var(--azul); }
 .msg label { font-size: .8rem; color: var(--suave); display: flex; gap: 6px; align-items: center; }
 .msg dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: .88rem; }
@@ -80,6 +86,7 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
     <span class="chip" id="chipChat">Chat: não configurado</span>
     <span class="chip" id="chipIA">IA: textos do agente</span>
     <span class="chip" id="chipDM">Data Mart: verificando</span>
+    <span class="chip" id="chipWL">Wishlist afiliadas: verificando</span>
     <span class="timer" id="timer" aria-live="polite">0,0 s</span>
     <button class="go" id="rodar">Rodar agente</button>
   </header>
@@ -95,6 +102,12 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
       <p class="empty">As ações por time aparecem aqui.</p>
     </section>
   </main>
+
+  <details id="acoesBox">
+    <summary>Ações para afiliadas criadas</summary>
+    <p class="note">Cada ação guarda a cobertura e a venda de quando foi criada, para comparar depois. Feche a ação quando o resultado estiver medido.</p>
+    <div class="acoes" id="acoesLista"><p class="note">Abra para carregar.</p></div>
+  </details>
 
   <details id="realBox">
     <summary>Testar com um produto real</summary>
@@ -156,6 +169,8 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
       $("#chipIA").classList.toggle("on", status.ia);
       $("#chipDM").textContent = status.datamart ? "Data Mart: conectado" : "Data Mart: indisponível";
       $("#chipDM").classList.toggle("on", status.datamart);
+      $("#chipWL").textContent = status.wishlist ? "Wishlist afiliadas: conectado" : "Wishlist afiliadas: sem chave";
+      $("#chipWL").classList.toggle("on", status.wishlist);
     } catch (e) {}
   }
 
@@ -191,8 +206,9 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
         <span>Oferta: <b>${esc(a.oferta.descricao)}</b></span>
         <span>Preço mínimo com margem: <b>${brl(a.precoMinimo)}</b></span>
       </div>
+      <div class="primeira-bar"><b>Primeira solução: afiliadas.</b><span>${esc(a.mensagens[0].oQueFazer)}</span><button class="go" id="acao">Criar ação para afiliadas</button><span class="note" id="acaoMsg" style="color:var(--branco)"></span></div>
       <div class="msgs">${a.mensagens.map((m, i) => `
-        <article class="msg">
+        <article class="msg${i === 0 ? " primeira" : ""}">
           <div class="top"><h3>${esc(m.time)}</h3><label><input type="checkbox" class="sel" value="${esc(m.time)}" checked> enviar</label></div>
           <dl><dt>O que fazer</dt><dd>${esc(m.oQueFazer)}</dd><dt>Por quê</dt><dd>${esc(m.porque)}</dd><dt>Até quando</dt><dd>${esc(m.ateQuando)}</dd></dl>
           <pre id="pronto-${i}">${esc(m.pronto)}</pre>
@@ -207,6 +223,7 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
       </div>`;
     document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => copiar(b)));
     $("#enviar").addEventListener("click", enviar);
+    $("#acao").addEventListener("click", criarAcao);
     $("#ia").addEventListener("click", reescrever);
     const rm = $("#remover"); if (rm) rm.addEventListener("click", remover);
   }
@@ -312,6 +329,35 @@ form .full { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center;
   }
   $("#realBox").addEventListener("toggle", () => { if ($("#realBox").open && !linhasCarregadas) carregarLinhas(); });
   $("#dm-puxar").addEventListener("click", puxarLinha);
+
+  // ---- Ações para afiliadas (primeira solução) ----
+  async function criarAcao() {
+    const out = $("#acaoMsg");
+    out.textContent = "Criando...";
+    try {
+      const r = await api("/api/acoes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: atual.sku }) });
+      out.textContent = r.ja_existia ? `Já existe a ação #${r.id} aberta para este produto.` : `Ação #${r.id} criada.`;
+      carregarAcoes();
+    } catch (e) { out.textContent = e.message; }
+  }
+  async function carregarAcoes() {
+    const box = $("#acoesLista");
+    try {
+      const r = await api("/api/acoes");
+      box.innerHTML = r.acoes.length ? r.acoes.map((x) => `
+        <div class="acao"><b>#${x.id} · ${esc(x.produto)} · ${esc(x.status)}</b>
+          <span>${esc(x.oque_fazer)}</span>
+          <small>Criada em ${esc(String(x.criada_em).slice(0, 16))} por ${esc(x.criada_por || "")} · cobertura ${esc(x.baseline.cobertura_dias ?? "?")} d, estoque ${esc(x.baseline.estoque_un ?? "?")} un${x.nota ? " · " + esc(x.nota) : ""}</small>
+          ${x.status === "aberta" ? `<span><button data-fechar="${x.id}">Fechar ação</button></span>` : ""}
+        </div>`).join("") : '<p class="note">Nenhuma ação criada ainda.</p>';
+      box.querySelectorAll("[data-fechar]").forEach((b) => b.addEventListener("click", async () => {
+        const nota = prompt("Resultado medido (unidades vendidas por cupom, cobertura depois):") || "";
+        await api("/api/acoes/fechar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: +b.dataset.fechar, nota }) });
+        carregarAcoes();
+      }));
+    } catch (e) { box.innerHTML = `<p class="note err">${esc(e.message)}</p>`; }
+  }
+  $("#acoesBox").addEventListener("toggle", () => { if ($("#acoesBox").open) carregarAcoes(); });
   carregarStatus();
 })();
 </script>

@@ -2,6 +2,7 @@
 // Funções puras, sem I/O. Os números de INFLUENCIA vêm do Growth MCP (GoCreators) e são um retrato datado:
 // confira `coletado_em` antes de decidir. Para atualizar, rode de novo as consultas listadas em `fonte`.
 import type { Produto } from "./agente";
+import { MARCA_CHAVE, type WishlistMatch } from "./afiliados";
 
 export const INFLUENCIA = {
   coletado_em: "2026-10-15",
@@ -98,7 +99,15 @@ export function linhaAfiliadas(nome: string) {
 }
 
 export type Missao = { oQueFazer: string; porque: string; pronto: string };
+export type ExtrasAfiliados = {
+  wishlist?: WishlistMatch | null; // produto casado no Wishlist das afiliadas (null = não achou)
+  wishlistEstado?: "ok" | "sem_chave" | "erro"; // estado da leitura do Wishlist
+};
 
+const reais2 = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Primeira solução do agente: sempre uma ação voltada para afiliadas, montada a partir do projeto de afiliados
+// (GoCreators e Wishlist). Nunca devolve "não faça nada": sem urgência ou sem margem a ação é mais leve, sem bônus.
 export function missaoInfluencia(
   p: Produto & { marca?: string },
   precoMin: number,
@@ -107,12 +116,15 @@ export function missaoInfluencia(
   variacaoPct: number,
   classe: "parado" | "em_risco" | "saudavel" | "campeao",
   saida: boolean,
+  extras: ExtrasAfiliados = {},
 ): Missao {
   const marca = p.marca || "Gocase";
   const prog = INFLUENCIA.marcas[marca];
   const { propria, vizinha } = linhaAfiliadas(p.produto);
+  const wish = extras.wishlist ?? null;
+  const temWishlist = !!MARCA_CHAVE[marca]; // Wishlist só cobre as marcas Gobeauté do formulário
 
-  // Só há missão com bônus quando existe urgência de escoar (parado ou entrando em slow moving).
+  // Só há bônus quando existe urgência de escoar (parado ou entrando em slow moving).
   const urgente = classe === "parado" || classe === "em_risco";
   // Limite pela margem: o que sobra do preço (já sem o desconto do cupom padrão) acima do preço mínimo.
   const liquido = p.preco_cheio_brl * (1 - INFLUENCIA.desconto_cupom_padrao_pct / 100);
@@ -135,41 +147,62 @@ export function missaoInfluencia(
   const marcaTxt = prog
     ? `${marca}: ${int(prog.vendendo)} de ${int(prog.ativas)} afiliadas venderam por cupom em 30 dias (${Math.round((prog.vendendo / prog.ativas) * 100)}%), ticket ${brl(prog.ticket)}.`
     : `${marca} não tem programa de afiliadas com dado no GoCreators; use seeding e macros.`;
-  const rodape = `Dados do programa: GoCreators em ${INFLUENCIA.coletado_em}, janela ${INFLUENCIA.periodo}.`;
 
-  // 1) sem urgência: não paga bônus
+  // Wishlist das afiliadas (projeto de afiliados): quem pediu este produto.
+  let wishTxt = "";
+  if (temWishlist) {
+    if (extras.wishlistEstado === "sem_chave") wishTxt = "Wishlist das afiliadas: sem acesso ainda (falta o secret WISHLIST_KEY no agente).";
+    else if (extras.wishlistEstado === "erro") wishTxt = "Wishlist das afiliadas: indisponível agora.";
+    else if (wish && wish.votos > 0)
+      wishTxt = `Wishlist das afiliadas: ${wish.votos} escolheram "${wish.produto_catalogo}" (${wish.posicao}º mais pedido de ${marca}, ${wish.total_respostas} respostas). Convide primeiro: ` +
+        wish.afiliadas.map(a => `@${a.instagram}${a.cupom ? ` (${a.cupom})` : ""}`).join(", ") + ".";
+    else if (wish) wishTxt = `Wishlist das afiliadas: ninguém escolheu "${wish.produto_catalogo}" (${wish.total_respostas} respostas): sem demanda declarada, trate como descoberta com seeding.`;
+    else if (extras.wishlistEstado === "ok") wishTxt = "Wishlist das afiliadas: este produto não está no catálogo do formulário.";
+  }
+  const rodape = `Fonte: projeto de afiliados. GoCreators em ${INFLUENCIA.coletado_em} (janela ${INFLUENCIA.periodo})` +
+    (temWishlist ? "; Wishlist das afiliadas ao vivo." : ".");
+  const seeding = `Seeding: em vez de comprar estoque novo, envie o produto parado para 20 creators (R$ ${reais2(p.custo_unit_brl * 20)} a custo, sem compra nova).`;
+  const medir = (extra = "") =>
+    `Como medir: unidades do produto vendidas por cupom em 14 dias (affiliate_top_products) ${un30 > 0 ? `contra os ${int(un30)} un de hoje (30 dias)` : "contra zero venda por cupom hoje"}, cobertura antes (${int(cobertura)} d) e depois${extra}.`;
+
+  // 1) sem urgência: ação leve, sem bônus
   if (!urgente) {
     return {
-      oQueFazer: `Não pague bônus por ${p.produto}: não há urgência de escoamento. Deixe as afiliadas na comissão normal do tier`,
+      oQueFazer: `Inclua ${p.produto} na lista de sugestões das afiliadas, com a comissão normal do tier (sem bônus)`,
       porque: motivo,
-      pronto: `Sem missão de escoamento: ${p.produto} está com cobertura saudável (${int(cobertura)} dias).\n` +
-        `Comissão normal: Club 5%, VIP 8%, Premium 10%. Bônus extra só quando o produto passar de 180 dias de cobertura ou a venda cair 30% ou mais.\n${rodape}`,
+      pronto: `Ação para afiliadas: ${p.produto} está com cobertura saudável (${int(cobertura)} dias), então a ação é leve.\n` +
+        `Sugira o produto às afiliadas Premium e VIP que vendem a categoria, na comissão normal (Club 5%, VIP 8%, Premium 10%). Bônus extra só se passar de 180 dias de cobertura ou a venda cair 30% ou mais.\n` +
+        (wishTxt ? `${wishTxt}\n` : "") + `${medir()}\n${rodape}`,
     };
   }
 
-  // 2) sem margem: não paga bônus
+  // 2) sem margem: ação sem bônus
   if (!temBonus) {
     return {
-      oQueFazer: `Não abra missão com bônus: a margem de ${p.produto} não comporta comissão extra. Use seeding do estoque parado`,
+      oQueFazer: `Ofereça ${p.produto} às afiliadas só em seeding e na comissão normal do tier (sem bônus)`,
       porque: motivo,
-      pronto: `Sem bônus para ${p.produto}: o limite pela margem é ${limiteMargemPct}% de comissão total (preço mínimo ${brl(precoMin)} contra preço líquido de ${brl(liquido)}), abaixo do menor tier (5%).\n` +
-        `Para itens de brinde ou margem baixa o caminho é brinde inserido por sistema no pedido, não afiliada.\n` +
-        `Seeding: envie o produto parado para 20 creators (R$ ${(p.custo_unit_brl * 20).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a custo, sem compra nova).\n${rodape}`,
+      pronto: `Ação para afiliadas: ${p.produto} não comporta comissão extra (limite pela margem de ${limiteMargemPct}% de comissão total; preço mínimo ${brl(precoMin)} contra preço líquido de ${brl(liquido)}).\n` +
+        `Use o produto em seeding e na comissão normal. Para brinde ou margem baixa, o caminho principal é o brinde inserido por sistema no pedido.\n` +
+        (wishTxt ? `${wishTxt}\n` : "") + `${seeding}\n${medir()}\n${rodape}`,
     };
   }
 
   // 3) missão com bônus
+  const pediram = wish && wish.votos > 0;
   let oQueFazer: string;
   let quem: string;
-  if (propria) {
+  if (pediram) {
+    oQueFazer = `Abra uma missão de escoamento de ${p.produto} para as ${wish!.votos} afiliadas que pediram o produto no Wishlist (comissão extra, sem desconto ao cliente)`;
+    quem = `${wishTxt}${propria ? ` Depois quem já vende ${propria.linha} (${int(propria.un_30d)} un em 30 dias, piso do top 200).` : ""}`;
+  } else if (propria) {
     oQueFazer = `Abra uma missão de escoamento de ${p.produto} para as afiliadas que já vendem ${propria.linha} (comissão extra, sem desconto ao cliente)`;
-    quem = `Convide primeiro quem já vende ${propria.linha}: até ${propria.afiliadas_max} afiliadas numa mesma estampa, ${int(propria.un_30d)} un em 30 dias (piso, top 200). Depois as Premium e VIP que venderam nos últimos 30 dias.`;
+    quem = `Convide primeiro quem já vende ${propria.linha}: até ${propria.afiliadas_max} afiliadas numa mesma estampa, ${int(propria.un_30d)} un em 30 dias (piso, top 200). Depois as Premium e VIP que venderam nos últimos 30 dias.${wishTxt ? " " + wishTxt : ""}`;
   } else if (vizinha) {
     oQueFazer = `Descubra ${p.produto} com afiliadas: nenhuma vende esta linha hoje. Missão com seeding e comissão extra (sem desconto ao cliente) para quem vende ${vizinha.linha}`;
-    quem = `Nenhuma afiliada vende esta linha hoje (fora do top 200 de produtos). Comece por quem vende ${vizinha.linha} (${int(vizinha.un_30d)} un em 30 dias, até ${vizinha.afiliadas_max} afiliadas numa estampa) e mande seeding para testar.`;
+    quem = `Nenhuma afiliada vende esta linha hoje (fora do top 200 de produtos). Comece por quem vende ${vizinha.linha} (${int(vizinha.un_30d)} un em 30 dias, até ${vizinha.afiliadas_max} afiliadas numa estampa) e mande seeding para testar.${wishTxt ? " " + wishTxt : ""}`;
   } else {
     oQueFazer = `Abra uma missão de escoamento de ${p.produto} para afiliadas Premium e VIP (comissão extra, sem desconto ao cliente)`;
-    quem = `Sem histórico desta linha entre as afiliadas. Comece pelas Premium (${INFLUENCIA.tiers[2].afiliadas}) e VIP (${INFLUENCIA.tiers[1].afiliadas}) que venderam nos últimos 30 dias: poucas concentram a venda (as 5 maiores da Gocase fazem ${INFLUENCIA.concentracao_gocase_top5_pct}% da receita de cupom).`;
+    quem = `Sem histórico desta linha entre as afiliadas. Comece pelas Premium (${INFLUENCIA.tiers[2].afiliadas}) e VIP (${INFLUENCIA.tiers[1].afiliadas}) que venderam nos últimos 30 dias: poucas concentram a venda (as 5 maiores da Gocase fazem ${INFLUENCIA.concentracao_gocase_top5_pct}% da receita de cupom).${wishTxt ? " " + wishTxt : ""}`;
   }
 
   const tabela =
@@ -179,29 +212,33 @@ export function missaoInfluencia(
 
   const limite = un30 > 0
     ? `Limite do canal: as afiliadas escoam no mínimo ${escoaPct.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% do estoque por mês (${int(un30)} de ${int(p.estoque_un)} un). No ritmo atual seriam ${int(mesesNoRitmo)} meses; mesmo triplicando, afiliada acelera mas não resolve sozinha. Combine com B2B, marketplace e freio de compra.`
-    : `Limite do canal: afiliada acelera, não resolve sozinha. Mesmo se toda a venda de afiliadas da Gocase fosse deste produto, limparia ~8% do estoque parado.`;
+    : marca === "Gocase"
+      ? `Limite do canal: afiliada acelera, não resolve sozinha. Mesmo se toda a venda de afiliadas da Gocase fosse deste produto, limparia ~8% do estoque parado.`
+      : `Limite do canal: afiliada acelera, não resolve sozinha. Só ${prog ? int(prog.vendendo) : "poucas"} afiliadas de ${marca} venderam por cupom em 30 dias; combine com B2B, marketplace e freio de compra.`;
 
   const alerta: string[] = [];
   if (variacaoPct <= -30) alerta.push(`A venda caiu ${Math.abs(variacaoPct).toLocaleString("pt-BR")}% em 30 dias: confirme com Growth se é demanda ou ruptura antes de pagar bônus.`);
   if (propria && propria.afiliadas_max >= 50 && cobertura > 180) alerta.push(`As afiliadas já vendem bem esta linha e a cobertura continua em ${int(cobertura)} dias: o gargalo é a compra, não a venda. Confira pedidos de compra em aberto.`);
 
   const pronto =
-    `Missão de escoamento: ${p.produto}\n` +
+    `Ação para afiliadas: missão de escoamento de ${p.produto}\n` +
     `Preço ao cliente: ${brl(p.preco_cheio_brl)} (sem desconto extra; vale só o cupom padrão da afiliada).\n` +
     `${tabela}\n\n` +
     `Quem convidar: ${quem}\n${marcaTxt}\n\n` +
-    `Seeding: em vez de comprar estoque novo, envie o produto parado para 20 creators (R$ ${(p.custo_unit_brl * 20).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} a custo, sem compra nova).\n` +
+    `${seeding}\n` +
     `Roteiro em 3 falas: mostrar o produto em uso; dizer que a missão vale por tempo limitado; chamar para o link da afiliada.\n\n` +
-    `Como medir: unidades do produto vendidas por cupom em 14 dias (affiliate_top_products) ${un30 > 0 ? `contra os ${int(un30)} un de hoje (30 dias)` : "contra zero venda por cupom hoje"}, cobertura antes (${int(cobertura)} d) e depois, e comissão total paga de no máximo ${maiorTotalPct}%.\n` +
+    `${medir(` e comissão total paga de no máximo ${maiorTotalPct}%`)}\n` +
     `${limite}` +
     (alerta.length ? `\nAtenção: ${alerta.join(" ")}` : "") +
     `\n${rodape}`;
 
-  const porque = propria
-    ? `${motivo}; afiliadas já vendem a linha (${int(propria.un_30d)} un em 30 dias)`
-    : vizinha
-      ? `${motivo}; nenhuma afiliada vende esta linha hoje`
-      : motivo;
+  const porque = pediram
+    ? `${motivo}; ${wish!.votos} afiliadas pediram o produto no Wishlist`
+    : propria
+      ? `${motivo}; afiliadas já vendem a linha (${int(propria.un_30d)} un em 30 dias)`
+      : vizinha
+        ? `${motivo}; nenhuma afiliada vende esta linha hoje`
+        : motivo;
 
   return { oQueFazer, porque, pronto };
 }

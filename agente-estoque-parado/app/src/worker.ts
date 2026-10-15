@@ -5,10 +5,14 @@
 // POST /api/ia               reescreve os textos de Growth com o AI Proxy (env.AI_PROXY_KEY), se configurado
 // GET  /api/linhas           linhas Gocase com estoque no Data Mart (ao vivo, pelo proxy do GoDeploy)
 // GET  /api/datamart/linha   estoque, custo, preço, venda 30d/30d anteriores e PO de uma linha, do Data Mart
+// GET  /api/acoes            ações para afiliadas já criadas (primeira solução do agente)
+// POST /api/acoes            cria a ação para afiliadas de um produto { sku }
+// POST /api/acoes/fechar     fecha uma ação { id, nota }
 // GET  /api/status           o que está configurado
 import { DATA } from "./data";
-import { analisar, radar, textoChat, type Base, type Produto } from "./agente";
+import { analisar, radar, textoChat, type Base, type Extras, type Produto } from "./agente";
 import { INFLUENCIA } from "./influencia";
+import { carregarWishlist, votosDoProduto, type WishlistEstado } from "./afiliados";
 
 type Env = {
   DB: { query: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>; exec: (sql: string, p: unknown[]) => Promise<unknown> };
@@ -16,6 +20,7 @@ type Env = {
   AI_PROXY_KEY?: string;
   AI_MODEL?: string;
   PROXY_BASE_URL?: string;
+  WISHLIST_KEY?: string; // ADMIN_KEY do app wishlist-afiliadas (projeto de afiliados)
 };
 
 const json = (body: unknown, status = 200) =>
@@ -24,6 +29,8 @@ const json = (body: unknown, status = 200) =>
 async function setup(env: Env) {
   await env.DB.exec(
     `CREATE TABLE IF NOT EXISTS produtos_reais (sku TEXT PRIMARY KEY, dados TEXT NOT NULL, criado_por TEXT, criado_em TEXT DEFAULT (datetime('now')))`, []);
+  await env.DB.exec(
+    `CREATE TABLE IF NOT EXISTS acoes (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT NOT NULL, produto TEXT, time TEXT DEFAULT 'Influência', oque_fazer TEXT, pronto TEXT, baseline TEXT, status TEXT DEFAULT 'aberta', nota TEXT, criada_por TEXT, criada_em TEXT DEFAULT (datetime('now')), fechada_por TEXT, fechada_em TEXT)`, []);
   await env.DB.exec(
     `CREATE TABLE IF NOT EXISTS envios (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT, time TEXT, ok INTEGER, enviado_por TEXT, enviado_em TEXT DEFAULT (datetime('now')))`, []);
 }
@@ -134,6 +141,22 @@ async function dadosDaLinha(env: Env, request: Request, linha: string) {
   };
 }
 
+
+// Contexto do projeto de afiliados para o bloco de Influência: Wishlist lido uma vez por requisição (cache de 5 min).
+async function extrasAfiliados(env: Env): Promise<{ extras: Extras; estado: WishlistEstado["estado"] }> {
+  const w: WishlistEstado = await carregarWishlist(env.WISHLIST_KEY);
+  if (w.estado === "erro") console.log("wishlist", w.motivo);
+  return {
+    estado: w.estado,
+    extras: {
+      afiliados: (p: Produto) => ({
+        wishlistEstado: w.estado,
+        wishlist: w.estado === "ok" ? votosDoProduto(w.wishlist, p.produto, p.marca ?? "Gocase") : null,
+      }),
+    },
+  };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -142,13 +165,44 @@ export default {
       await setup(env);
 
       if (url.pathname === "/api/status") {
-        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, datamart: !!env.PROXY_BASE_URL, usuario: quem });
+        return json({ webhook: !!env.CHAT_WEBHOOK_URL, ia: !!env.AI_PROXY_KEY, datamart: !!env.PROXY_BASE_URL, wishlist: !!env.WISHLIST_KEY, usuario: quem });
       }
 
       if (url.pathname === "/api/radar" && request.method === "GET") {
         const t0 = Date.now();
-        const r = radar(await base(env));
+        const r = radar(await base(env), new Date(), (await extrasAfiliados(env)).extras);
         return json({ ...r, ms: Date.now() - t0 });
+      }
+
+      if (url.pathname === "/api/acoes" && request.method === "GET") {
+        const r = await env.DB.query(`SELECT id, sku, produto, time, oque_fazer, status, nota, baseline, criada_por, criada_em, fechada_em FROM acoes ORDER BY id DESC LIMIT 50`, []);
+        return json({ acoes: r.rows.map(x => ({ ...x, baseline: JSON.parse(String(x.baseline || "{}")) })) });
+      }
+
+      if (url.pathname === "/api/acoes" && request.method === "POST") {
+        const { sku } = await request.json() as { sku: string };
+        const bs = await base(env);
+        const p = bs.produtos.find(x => x.sku === sku);
+        if (!p) return json({ erro: "Produto não encontrado" }, 404);
+        const aberta = await env.DB.query(`SELECT id FROM acoes WHERE sku = ? AND status = 'aberta' ORDER BY id DESC LIMIT 1`, [sku]);
+        if (aberta.rows.length) return json({ ok: true, id: aberta.rows[0].id, ja_existia: true });
+        const a = analisar(p, bs, new Date(), (await extrasAfiliados(env)).extras);
+        const m = a.mensagens[0]; // primeira solução = afiliadas
+        const baseline = JSON.stringify({
+          data: new Date().toISOString().slice(0, 10), cobertura_dias: a.coberturaDias, estoque_un: p.estoque_un,
+          venda_30d_un: p.venda_media_30d_un, po_pendente_un: p.po_pendente_un ?? 0, valor_estoque_brl: a.valorEstoque,
+          fonte: "projeto de afiliados: GoCreators " + INFLUENCIA.coletado_em + " e Wishlist",
+        });
+        await env.DB.exec(`INSERT INTO acoes (sku, produto, time, oque_fazer, pronto, baseline, criada_por) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [sku, p.produto, m.time, m.oQueFazer, m.pronto, baseline, quem]);
+        const novo = await env.DB.query(`SELECT id FROM acoes WHERE sku = ? ORDER BY id DESC LIMIT 1`, [sku]);
+        return json({ ok: true, id: novo.rows[0]?.id, ja_existia: false, oque_fazer: m.oQueFazer });
+      }
+
+      if (url.pathname === "/api/acoes/fechar" && request.method === "POST") {
+        const { id, nota } = await request.json() as { id: number; nota?: string };
+        await env.DB.exec(`UPDATE acoes SET status = 'fechada', nota = ?, fechada_por = ?, fechada_em = datetime('now') WHERE id = ?`, [String(nota ?? "").slice(0, 500), quem, id]);
+        return json({ ok: true });
       }
 
       if (url.pathname === "/api/linhas" && request.method === "GET") {
@@ -186,7 +240,7 @@ export default {
         const po = num(b.po_pendente_un);
         if (Number.isFinite(po) && po > 0) p.po_pendente_un = po;
         await env.DB.exec(`INSERT OR REPLACE INTO produtos_reais (sku, dados, criado_por) VALUES (?, ?, ?)`, [p.sku, JSON.stringify(p), quem]);
-        return json({ ok: true, analise: analisar(p, await base(env)) });
+        return json({ ok: true, analise: analisar(p, await base(env), new Date(), (await extrasAfiliados(env)).extras) });
       }
 
       if (url.pathname === "/api/produtos" && request.method === "DELETE") {
@@ -201,7 +255,7 @@ export default {
         const bs = await base(env);
         const p = bs.produtos.find(x => x.sku === sku);
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
-        const a = analisar(p, bs);
+        const a = analisar(p, bs, new Date(), (await extrasAfiliados(env)).extras);
         const enviados: { time: string; ok: boolean }[] = [];
         for (const m of a.mensagens.filter(m => times.includes(m.time))) {
           const r = await fetch(env.CHAT_WEBHOOK_URL, {
@@ -220,7 +274,7 @@ export default {
         const bs = await base(env);
         const p = bs.produtos.find(x => x.sku === sku);
         if (!p) return json({ erro: "Produto não encontrado" }, 404);
-        return json(await reescreverComIA(env, analisar(p, bs)));
+        return json(await reescreverComIA(env, analisar(p, bs, new Date(), (await extrasAfiliados(env)).extras)));
       }
 
       return json({ erro: "Rota não encontrada" }, 404);
