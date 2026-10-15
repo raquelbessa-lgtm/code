@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agente Slow Moving B2B</title>
+<title>D.R.I.F.T.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
@@ -61,7 +61,11 @@ p { margin: 0; }
 .capa { justify-content: space-between; padding-top: 4.4cqw; }
 .capa .projeto { font-size: 1.8cqw; font-weight: 600; color: var(--lima); letter-spacing: .02em; }
 .gigante { font-size: 22cqw; font-weight: 800; letter-spacing: -.06em; line-height: .82; color: var(--lima); font-variant-numeric: tabular-nums; }
-.titulo-capa { font-size: 10.4cqw; line-height: .95; color: var(--branco); max-width: 12ch; margin-top: auto; margin-bottom: auto; }
+.capa-nome { margin-top: auto; margin-bottom: auto; display: grid; gap: 1.6cqw; }
+.titulo-capa { font-size: 13cqw; line-height: .95; color: var(--branco); letter-spacing: -.01em; }
+.sigla { font-size: 2.4cqw; font-weight: 500; color: rgba(255,255,255,.85); }
+.sigla b { color: var(--lima); font-weight: 800; }
+.metafora { font-size: 2.1cqw; line-height: 1.4; color: rgba(255,255,255,.9); max-width: 58ch; font-style: italic; }
 .legenda { font-size: 3.4cqw; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; max-width: 22ch; color: var(--branco); margin-top: 1.4cqw; }
 .time { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.4cqw; }
 .time li { border-top: .45cqw solid var(--lima); padding-top: 1.2cqw; display: grid; gap: .3cqw; }
@@ -199,7 +203,7 @@ body.com-notas .notas { display: block; }
 </head>
 <body>
 <div class="bar">
-  <span class="nome">Agente Slow Moving B2B</span>
+  <span class="nome">D.R.I.F.T.</span>
   <span class="dica">← → navega · N notas · Home zera o tempo</span>
   <span class="relogio" id="relogio" title="Tempo desde o segundo slide">0:00</span>
   <button id="ant" aria-label="Slide anterior">Anterior</button>
@@ -213,8 +217,11 @@ body.com-notas .notas { display: block; }
 <div class="palco" id="palco">
 
   <!-- 1 Abertura · 0:00 a 0:15 -->
-  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="“Somos o time do Agente Slow Moving B2B: Wilkerson, Larissa, Raquel e Rafael.”">
-    <h1 class="titulo-capa">Agente Slow Moving B2B</h1>
+  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="“Somos o time do DRIFT: Direcionamento e Retirada de Itens por Fluxo e Tarifa. Wilkerson, Larissa, Raquel e Rafael.”">
+    <div class="capa-nome">
+      <h1 class="titulo-capa">D.R.I.F.T.</h1>
+      <p class="sigla"><b>D</b>irecionamento e <b>R</b>etirada de <b>I</b>tens por <b>F</b>luxo e <b>T</b>arifa</p>
+    </div>
     <ul class="time">
       <li><b>Wilkerson Fernandes</b></li>
       <li><b>Larissa Queiroz</b></li>
@@ -275,8 +282,9 @@ body.com-notas .notas { display: block; }
   </section>
 
   <!-- 5 Solução com IA · 1:20 a 2:10 (1/2) -->
-  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="“O agente opera sozinho, do começo ao fim. Escolhe o produto de slow moving ou descontinuado. Escolhe os clientes que compraram e pararam. Monta uma caixa fechada, com um único produto e a oferta já definida, dentro da faixa de tabela e acima do piso de margem: o cliente só precisa dizer sim ou não. Envia pelo WhatsApp, e o cliente fecha pelo link, sem ninguém no meio.”">
-    <h2>O agente opera sozinho, do começo ao fim</h2>
+  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="“O DRIFT é o nosso robô humanoide de manobra rápida. Quando um lote de produtos trava no estoque, o DRIFT entra em ação: calcula o risco de crédito do cliente, faz o ajuste preciso de preço e prazo, e faz o produto deslizar do depósito direto para o pedido do cliente. Ele opera sozinho, do começo ao fim. Escolhe o produto de slow moving ou descontinuado. Escolhe os clientes que compraram e pararam. Monta uma caixa fechada, com um único produto e a oferta já definida, dentro da faixa de tabela e acima do piso de margem: o cliente só precisa dizer sim ou não. Envia pelo WhatsApp, e o cliente fecha pelo link, sem ninguém no meio.”">
+    <h2>O DRIFT opera sozinho, do começo ao fim</h2>
+    <p class="metafora">Quando um lote trava no estoque, o DRIFT calcula o risco de crédito do cliente, ajusta preço e prazo e faz o produto deslizar do depósito direto para o pedido.</p>
     <div class="fluxo" style="margin-top:auto">
       <div class="elo agente"><b>Escolhe o produto</b><span>Slow moving ou descontinuado</span></div>
       <div class="elo agente"><b>Escolhe o cliente que parou</b><span>Comprou e sumiu. Nunca quem já compra</span></div>
