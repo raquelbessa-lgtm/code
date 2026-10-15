@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRM Slow Moving B2B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+<style>
+/* Conceito: a régua de cobertura. Estoque é medido em dias; a linha dos 120 dias separa o que gira do que parou.
+   Identidade gogroup: azul protagonista, lima para o que importa, vermelho só para "não oferecer". */
+:root {
+  --azul: #2659A5;
+  --azul-escuro: #1B4583;
+  --lima: #D7D900;
+  --papel: #F5F0E8;
+  --tinta: #14213D;
+  --tinta-suave: #4E5A73;
+  --linha: #CFC8BA;
+  --vermelho: #E5381A;
+  --branco: #FFFFFF;
+  --fonte: "Poppins", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--azul-escuro); color: var(--tinta); font-family: var(--fonte); display: flex; flex-direction: column; }
+
+/* Barra de controle */
+.bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--branco); font-size: 14px; flex-wrap: wrap; }
+.bar .nome { font-weight: 600; margin-right: auto; }
+.bar button { font: 600 13px var(--fonte); color: var(--branco); background: transparent; border: 1.5px solid rgba(255,255,255,.6); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.bar button:hover { border-color: var(--branco); }
+.bar button.go { background: var(--lima); color: var(--azul-escuro); border-color: var(--lima); }
+.bar .pos { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: center; }
+.bar .relogio { font-variant-numeric: tabular-nums; opacity: .85; }
+:focus-visible { outline: 3px solid var(--lima); outline-offset: 2px; }
+
+/* Palco 16:9 que escala; tudo dentro usa unidades do palco (cqw) */
+.palco-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 16px 16px; container-type: size; }
+.palco { position: relative; flex: none; width: min(100cqw, calc(100cqh * 16 / 9)); aspect-ratio: 16 / 9; container-type: size; border-radius: 1.2cqw; overflow: hidden; background: var(--papel); box-shadow: 0 2cqw 5cqw -2cqw rgba(0,0,0,.45); }
+.palco-wrap:fullscreen { background: var(--azul-escuro); padding: 0; }
+.palco-wrap:fullscreen .palco { border-radius: 0; box-shadow: none; }
+
+.slide { position: absolute; inset: 0; padding: 5cqw 6.5cqw 5.6cqw; display: none; flex-direction: column; gap: 1.8cqw; }
+.slide.on { display: flex; }
+.slide.escuro { background: var(--azul); color: var(--branco); }
+.janela { position: absolute; top: 2.6cqw; right: 3cqw; font-size: 1.15cqw; font-weight: 500; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.escuro .janela { color: rgba(255,255,255,.7); }
+.marca { position: absolute; bottom: 2.6cqw; right: 3cqw; font-size: 1.7cqw; font-weight: 700; color: var(--azul); letter-spacing: -.02em; }
+.escuro .marca { color: var(--branco); }
+
+h1, h2 { margin: 0; font-weight: 800; letter-spacing: -.025em; line-height: 1.02; text-wrap: balance; }
+h1 { font-size: 7.4cqw; }
+h2 { font-size: 3.9cqw; color: var(--azul); max-width: 88%; }
+.escuro h2 { color: var(--lima); }
+p { margin: 0; }
+.texto { font-size: 2cqw; line-height: 1.45; max-width: 60ch; }
+.nota { font-size: 1.15cqw; color: var(--tinta-suave); }
+.escuro .nota { color: rgba(255,255,255,.75); }
+.num { font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* A régua de cobertura (elemento marcante) */
+.regua { position: relative; height: 9cqw; margin-top: auto; }
+.regua .eixo { position: absolute; left: 0; right: 0; bottom: 3cqw; height: .35cqw; background: rgba(255,255,255,.35); }
+.regua .gira { position: absolute; left: 0; bottom: 3cqw; height: .35cqw; background: var(--branco); }
+.regua .corte { position: absolute; bottom: 1.6cqw; width: .45cqw; height: 4.2cqw; background: var(--lima); }
+.regua .corte-txt { position: absolute; bottom: 6.2cqw; font-size: 1.2cqw; font-weight: 600; color: var(--lima); white-space: nowrap; transform: translateX(-50%); }
+.regua .tick { position: absolute; bottom: 0; font-size: 1.05cqw; color: rgba(255,255,255,.7); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.regua .ponto { position: absolute; bottom: 2.45cqw; width: 1.5cqw; height: 1.5cqw; border-radius: 50%; background: var(--lima); transform: translateX(-50%); box-shadow: 0 0 0 .5cqw rgba(215,217,0,.25); }
+.regua .ponto-txt { position: absolute; bottom: 4.6cqw; font-size: 1.2cqw; color: var(--branco); white-space: nowrap; transform: translateX(-100%); text-align: right; }
+.regua .ponto-txt b { color: var(--lima); font-size: 2.2cqw; display: block; }
+@media (prefers-reduced-motion: no-preference) {
+  .slide.on .regua .ponto { animation: corre 1.4s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes corre { from { left: 0; opacity: 0; } }
+}
+
+/* Capa */
+.tese { font-size: 2.5cqw; line-height: 1.35; max-width: 48ch; color: var(--branco); }
+.equipe { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: .3cqw 3cqw; font-size: 1.35cqw; color: rgba(255,255,255,.85); }
+.equipe b { display: block; color: var(--branco); font-weight: 600; font-size: 1.5cqw; }
+
+.capa { justify-content: space-between; padding-top: 7cqw; }
+.capa h1 { font-size: 9.6cqw; line-height: .96; color: var(--branco); }
+.time { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.4cqw; }
+.time li { border-top: .45cqw solid var(--lima); padding-top: 1.4cqw; display: grid; gap: .4cqw; }
+.time b { font-size: 1.85cqw; white-space: nowrap; font-weight: 700; letter-spacing: -.015em; line-height: 1.15; }
+.time span { font-size: 1.4cqw; color: rgba(255,255,255,.8); }
+
+/* A Meta: ganho, inventário, despesa */
+.meta-lado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.6cqw; margin-top: .6cqw; }
+.meta-lado div { padding-top: 1.3cqw; border-top: .4cqw solid rgba(255,255,255,.5); display: grid; gap: .5cqw; align-content: start; }
+.meta-lado div.chave { border-top-color: var(--lima); }
+.meta-lado b { font-size: 1.6cqw; }
+.meta-lado .num { font-size: 4.4cqw; color: var(--lima); }
+.meta-lado p { font-size: 1.3cqw; line-height: 1.4; color: rgba(255,255,255,.85); }
+.resposta { font-size: 2.3cqw; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; max-width: 46ch; }
+.resposta span { display: block; font-size: 1.5cqw; font-weight: 500; color: rgba(255,255,255,.8); margin-bottom: .4cqw; }
+
+/* Unidades (37 de 40, 1 de 62) */
+.dois { display: grid; grid-template-columns: 1fr 1fr; gap: 4cqw; align-items: start; }
+.grade { display: grid; gap: .5cqw; margin-bottom: 1.2cqw; }
+.grade.g40 { grid-template-columns: repeat(10, 2.4cqw); }
+.grade.g62 { grid-template-columns: repeat(16, 1.5cqw); gap: .55cqw; }
+.cel { aspect-ratio: 1; border-radius: .35cqw; background: var(--azul); }
+.cel.livre { background: transparent; box-shadow: inset 0 0 0 .18cqw var(--azul); }
+.bola { aspect-ratio: 1; border-radius: 50%; background: var(--linha); }
+.bola.sim { background: var(--azul); box-shadow: 0 0 0 .35cqw var(--lima); }
+.fato .num { font-size: 4.6cqw; color: var(--azul); }
+.fato p { font-size: 1.6cqw; line-height: 1.35; max-width: 34ch; margin-top: .6cqw; }
+
+/* Achados */
+.achados { display: grid; gap: 1.3cqw; margin-top: .4cqw; }
+.achado { display: grid; grid-template-columns: 20cqw 1fr 24cqw; gap: 2.6cqw; align-items: center; padding-top: 1.3cqw; border-top: .15cqw solid var(--linha); }
+.achado .num { font-size: 3.7cqw; color: var(--azul); white-space: nowrap; }
+.achado .num.alerta { color: var(--vermelho); }
+.achado .o-que { font-size: 1.45cqw; line-height: 1.35; }
+.achado .o-que b { display: block; font-size: 1.6cqw; color: var(--tinta); margin-top: .3cqw; }
+.mini { display: grid; gap: .6cqw; font-size: 1.05cqw; color: var(--tinta-suave); }
+.trilho { height: 1.5cqw; border-radius: .3cqw; background: var(--linha); position: relative; overflow: hidden; }
+.trilho i { position: absolute; inset: 0 auto 0 0; background: var(--azul); }
+.trilho i.alerta { background: var(--vermelho); }
+.trilho i.lima { background: var(--lima); }
+
+/* Ponte e fechamento */
+.grande { font-size: 5.4cqw; font-weight: 800; letter-spacing: -.03em; line-height: 1.06; color: var(--lima); max-width: 18ch; text-wrap: balance; }
+.sub { font-size: 2.4cqw; color: var(--branco); }
+
+/* Demo */
+.demo { display: grid; grid-template-columns: 1.55fr 1fr; gap: 3cqw; flex: 1; min-height: 0; }
+.tela { position: relative; background: var(--tinta); border-radius: 1cqw; overflow: hidden; display: grid; place-items: center; min-height: 0; }
+.tela video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.tela .vazia { text-align: center; color: var(--branco); padding: 2cqw; display: grid; gap: 1.2cqw; justify-items: center; }
+.tela .vazia p { font-size: 1.5cqw; color: rgba(255,255,255,.8); max-width: 40ch; }
+.tela label, .tela a { font: 600 1.4cqw var(--fonte); background: var(--lima); color: var(--azul-escuro); border-radius: 999px; padding: .9cqw 2cqw; cursor: pointer; text-decoration: none; }
+.tela a { background: transparent; color: var(--branco); box-shadow: inset 0 0 0 .15cqw rgba(255,255,255,.7); }
+.tela input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.produto { display: grid; gap: 1.4cqw; align-content: start; }
+.produto h3 { margin: 0; font-size: 2.2cqw; line-height: 1.15; color: var(--azul); letter-spacing: -.02em; }
+.canal { display: grid; grid-template-columns: auto 1fr; gap: .2cqw 1.4cqw; align-items: baseline; padding-top: 1cqw; border-top: .15cqw solid var(--linha); }
+.canal .num { font-size: 3.4cqw; color: var(--azul); grid-row: span 2; }
+.canal b { font-size: 1.45cqw; }
+.canal span { font-size: 1.3cqw; color: var(--tinta-suave); line-height: 1.35; }
+.roteiro { margin: 0; padding-left: 1.6cqw; font-size: 1.25cqw; line-height: 1.5; color: var(--tinta-suave); }
+
+/* Resultado */
+.lado { display: grid; grid-template-columns: 1fr 1fr; gap: 3cqw; }
+.coluna { border-radius: 1cqw; padding: 2.2cqw 2.4cqw; display: grid; gap: 1.1cqw; align-content: start; }
+.coluna.antes { box-shadow: inset 0 0 0 .18cqw var(--linha); }
+.coluna.depois { background: var(--azul); color: var(--branco); }
+.coluna h3 { margin: 0; font-size: 2cqw; letter-spacing: -.01em; }
+.coluna.depois h3 { color: var(--lima); }
+.coluna .de { font-size: 1.15cqw; color: var(--tinta-suave); margin-top: -.6cqw; }
+.coluna.depois .de { color: rgba(255,255,255,.75); }
+.linha-m { display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw; padding-top: 1cqw; border-top: .12cqw solid var(--linha); font-size: 1.45cqw; }
+.coluna.depois .linha-m { border-color: rgba(255,255,255,.25); }
+.linha-m .num { font-size: 3cqw; color: var(--azul); }
+.coluna.depois .linha-m .num { color: var(--lima); }
+.campo { min-width: 4ch; text-align: right; border-bottom: .15cqw dashed currentColor; outline: none; cursor: text; }
+.campo:focus { background: rgba(215,217,0,.18); }
+body.apresentando .campo { border-bottom-color: transparent; }
+
+/* Fluxo */
+.fluxo { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.6cqw; margin-top: 2cqw; position: relative; }
+.elo { position: relative; padding-top: 1.6cqw; border-top: .4cqw solid rgba(255,255,255,.4); }
+.elo.agente { border-top-color: var(--lima); }
+.elo b { display: block; font-size: 1.9cqw; color: var(--branco); letter-spacing: -.01em; }
+.elo.agente b { color: var(--lima); }
+.elo span { display: block; font-size: 1.3cqw; line-height: 1.4; color: rgba(255,255,255,.8); margin-top: .6cqw; }
+.elo:not(:last-child)::after { content: ""; position: absolute; top: -1.05cqw; right: -2.3cqw; width: 1.6cqw; height: 1.6cqw; border-top: .4cqw solid rgba(255,255,255,.6); border-right: .4cqw solid rgba(255,255,255,.6); transform: rotate(45deg); }
+.volta { margin-top: 3cqw; font-size: 1.4cqw; color: rgba(255,255,255,.8); display: flex; gap: 1cqw; align-items: center; }
+.volta i { flex: 1; height: .15cqw; background: rgba(255,255,255,.35); }
+
+/* Fluxo atual (slide claro): onde está a fricção hoje */
+.fluxo.claro { grid-template-columns: repeat(4, 1fr); gap: 3.4cqw; }
+.fluxo.claro .elo { border-top-color: var(--azul); }
+.fluxo.claro .elo b { color: var(--azul); }
+.fluxo.claro .elo span { color: var(--tinta-suave); }
+.fluxo.claro .elo:not(:last-child)::after { border-top-color: var(--azul); border-right-color: var(--azul); right: -2.7cqw; }
+.fluxo.claro .elo.atrito { border-top-color: var(--vermelho); }
+.fluxo.claro .elo.atrito b { color: var(--vermelho); }
+.fluxo.claro .elo .atrito-num { display: block; margin-top: 1.6cqw; font-size: 3.6cqw; font-weight: 800; font-style: normal; letter-spacing: -.03em; line-height: 1; color: var(--vermelho); font-variant-numeric: tabular-nums; }
+.fluxo.claro .elo .atrito-txt { display: block; margin-top: .5cqw; font-size: 1.25cqw; font-style: normal; color: var(--tinta); }
+
+/* Solução: uma frase e três decisões */
+.frase { font-size: 3.1cqw; font-weight: 700; line-height: 1.22; letter-spacing: -.02em; color: var(--branco); max-width: 40ch; text-wrap: balance; margin-top: 2cqw; }
+.usuario { display: grid; grid-template-columns: auto 1fr; gap: 2.4cqw; align-items: start; padding: 1.6cqw 2cqw; border-radius: 1cqw; box-shadow: inset 0 0 0 .18cqw var(--linha); }
+.usuario b { font-size: 1.5cqw; color: var(--azul); white-space: nowrap; }
+.usuario p { font-size: 1.5cqw; line-height: 1.4; }
+.meta-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6cqw; }
+.meta-col div { display: grid; gap: .3cqw; align-content: start; padding-top: 1cqw; border-top: .12cqw solid rgba(255,255,255,.25); }
+.meta-col b { font-size: 1.3cqw; }
+.meta-col .num { font-size: 2.5cqw; color: var(--lima); white-space: nowrap; }
+.meta-col p { font-size: 1.1cqw; line-height: 1.35; color: rgba(255,255,255,.8); }
+
+/* Implantação e decisão */
+.tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3cqw; margin-top: 1cqw; }
+.quatro { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.4cqw; margin-top: 1cqw; }
+.item { padding-top: 1.4cqw; border-top: .4cqw solid var(--azul); display: grid; gap: .8cqw; align-content: start; }
+.item b { font-size: 2cqw; color: var(--azul); letter-spacing: -.01em; }
+.item p { font-size: 1.5cqw; line-height: 1.45; }
+.item.nao { border-top-color: var(--vermelho); }
+.item.nao b { color: var(--vermelho); }
+.escuro .item { border-top-color: rgba(255,255,255,.5); }
+.escuro .item b { color: var(--branco); }
+.escuro .item p { color: rgba(255,255,255,.85); }
+.escuro .item.nao { border-top-color: var(--lima); }
+.escuro .item.nao b { color: var(--lima); }
+
+/* Sabatina */
+.qa { display: grid; grid-template-columns: 1fr 1fr; gap: 2.2cqw 3.4cqw; margin-top: 1cqw; }
+.qa div { padding-top: 1.2cqw; border-top: .15cqw solid var(--linha); }
+.qa b { display: block; font-size: 1.6cqw; color: var(--azul); margin-bottom: .6cqw; }
+.qa p { font-size: 1.35cqw; line-height: 1.45; }
+
+/* Notas do apresentador */
+.notas { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(20,33,61,.94); color: var(--branco); font-size: 1.4cqw; line-height: 1.45; padding: 1.6cqw 3cqw; display: none; }
+body.com-notas .notas { display: block; }
+.progresso { position: absolute; left: 0; bottom: 0; height: .35cqw; background: var(--lima); transition: width .3s; }
+
+@media (max-width: 640px) { .bar .dica { display: none; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="nome">CRM Slow Moving B2B</span>
+  <span class="relogio" id="relogio" title="Tempo desde que você começou a apresentar">0:00</span>
+  <button id="ant" aria-label="Slide anterior">Anterior</button>
+  <span class="pos" id="pos" aria-live="polite">1/9</span>
+  <button id="prox" aria-label="Próximo slide">Próximo</button>
+  <button id="btnNotas">Notas</button>
+  <button class="go" id="btnTela">Apresentar</button>
+</div>
+
+<div class="palco-wrap" id="wrap">
+<div class="palco" id="palco">
+
+  <!-- 1 Abertura · 0:00 a 0:15 · identidade: projeto + desafio + equipe -->
+  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="ABERTURA (identidade: projeto, desafio e equipe). Diga o nome do projeto, o desafio (acelerar o slow moving do B2B Gobeaute) e quem é a equipe. Feche com a tese, falada: não basta achar o estoque parado; é preciso saber para quem vender, quando agir, em que condição e quando não oferecer.">
+    <h1>CRM<br>Slow Moving B2B</h1>
+    <ul class="time">
+      <li><b>Larissa Queiroz</b><span>B2B</span></li>
+      <li><b>Rafael Craveiro</b><span>Operações B2B Gobeaute</span></li>
+      <li><b>Raquel Bessa</b><span>Marketing de Influência</span></li>
+      <li><b>Wilkerson Fernandes</b><span>DP</span></li>
+    </ul>
+  </section>
+
+  <!-- 2 Dor e usuário-chave · 0:15 a 0:50 · empatia: quem sofre, qual o custo -->
+  <section class="slide" data-janela="Dor e usuário-chave · 0:15 a 0:50" data-nota="DOR E USUÁRIO-CHAVE (empatia: quem sofre, qual o custo). O custo: R$ 19 milhões a custo parados em 37 SKUs. Quem sofre: o gestor do B2B, que tem estoque parado e clientes parados e nenhuma forma rápida de juntar os dois toda semana. Os números vêm da Torre, hoje.">
+    <h2>R$ 19 milhões parados no B2B Gobeaute</h2>
+    <div class="usuario"><b>Usuário-chave</b><p>O gestor do B2B Gobeaute. Ele tem estoque parado no atacado e, ao mesmo tempo, clientes que pararam de comprar. Hoje não junta os dois: a campanha vai para a carteira toda e espera aprovação.</p></div>
+    <div class="dois" style="margin-top:auto">
+      <div class="fato">
+        <div class="grade g40" id="g40" aria-hidden="true"></div>
+        <div class="num">37 de 40</div>
+        <p>SKUs B2B de maior estoque passam de 120 dias de cobertura: 2 milhões de unidades</p>
+      </div>
+      <div class="fato">
+        <div class="grade g62" id="g62" aria-hidden="true"></div>
+        <div class="num">1 de 62</div>
+        <p>campanhas de slow moving no Gira foi aprovada; as outras 61 seguem em proposta</p>
+      </div>
+    </div>
+    <p class="nota">Fonte: Torre B2B, 15/10/2026. Slow moving: estoque acima de 120 dias no ritmo de venda dos últimos 15 dias. Valor a custo do produto.</p>
+  </section>
+
+  <!-- 3 Fluxo atual · 0:50 a 1:20 · urgência: onde está a fricção hoje -->
+  <section class="slide" data-janela="Fluxo atual · 0:50 a 1:20" data-nota="FLUXO ATUAL (urgência: onde está a fricção hoje). Quatro passos, três pontos vermelhos: a campanha vai para a carteira toda (e a maioria das recompras já trocou de item), a proposta fica esperando aprovação e, quando chega, só 36% dos links viram pedido.">
+    <h2>Hoje: a lista chega, o pedido não sai</h2>
+    <div class="fluxo claro">
+      <div class="elo"><b>A Torre lista o parado</b><span>SKUs com mais de 120 dias de cobertura</span></div>
+      <div class="elo atrito"><b>Campanha para a carteira toda</b><span>Ninguém diz quem está na hora de comprar</span><i class="atrito-num">131 de 188</i><i class="atrito-txt">recompras já trocaram por outro item</i></div>
+      <div class="elo atrito"><b>Proposta espera aprovação</b><span>A campanha para antes de chegar ao cliente</span><i class="atrito-num">61 de 62</i><i class="atrito-txt">campanhas ainda em proposta</i></div>
+      <div class="elo atrito"><b>Link vai ao cliente</b><span>O pedido só sai se o cliente aprovar</span><i class="atrito-num">36%</i><i class="atrito-txt">dos links enviados viram pedido</i></div>
+    </div>
+    <p class="nota" style="margin-top:auto">Fonte: Torre B2B (pedidos, campanhas e links do Gira), 15/10/2026. 25 links de pedido pronto enviados: 64% abertos, 36% aprovados.</p>
+  </section>
+
+  <!-- 4 Solução com IA · 1:20 a 2:10 · expectativa: o que a IA faz de diferente -->
+  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="SOLUÇÃO COM IA (expectativa: o que a IA faz de diferente). Leia a frase. Depois as três decisões: para quem (100 clientes parados com maior potencial, sem repetir), que oferta (caixa fechada no tamanho do histórico, acima de R$ 1.500 com frete grátis, preço pela faixa da Torre, prazo só para Score A) e como fecha (o cliente decide no link do WhatsApp). Ponte: agora mostro funcionando.">
+    <p class="frase">Toda semana, a IA monta uma campanha de caixa fechada com os 3 SKUs mais parados e oferece aos 100 clientes inativos com maior potencial. O gestor aprova na segunda e o cliente adere pelo WhatsApp.</p>
+    <div class="tres" style="margin-top:auto">
+      <div class="item nao"><b>Para quem</b><p>Os 100 clientes parados do Sul e do Sudeste com maior potencial de compra. Quem já recebeu os mesmos produtos não recebe de novo.</p></div>
+      <div class="item"><b>Que oferta</b><p>Caixas no tamanho do histórico do cliente, pedido acima de R$ 1.500 com frete grátis, preço pela faixa da Torre e prazo só para Score A sem inadimplência. Vale 7 dias.</p></div>
+      <div class="item"><b>Como fecha</b><p>No link do WhatsApp o cliente adere e o pedido é gerado, pede outros itens e vai ao vendedor, ou recusa. O estoque fica reservado antes.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 Demo · 2:10 a 3:30 · evidência: veja funcionando -->
+  <section class="slide" data-janela="Demo · 2:10 a 3:30" data-nota="DEMO (evidência: veja funcionando). Vídeo de cerca de 1:20. Não corte a demo: se faltar tempo, corte texto dos outros blocos. Siga o roteiro ao lado. Os disparos ainda estão em modo teste: diga isso.">
+    <h2>Funcionando</h2>
+    <div class="demo">
+      <div class="tela" id="tela">
+        <div class="vazia" id="vazia">
+          <p>Carregue o vídeo da demo. Ele fica só neste navegador e não é enviado.</p>
+          <label for="arquivo">Carregar vídeo da demo</label>
+          <input type="file" id="arquivo" accept="video/*">
+          <a href="https://crm-slowmoving-b2b-estoque.devgogroup.com/" target="_blank" rel="noopener">Abrir o painel ao vivo</a>
+        </div>
+      </div>
+      <div class="produto">
+        <h3>O que o vídeo mostra</h3>
+        <ol class="roteiro" style="font-size:1.5cqw">
+          <li>O estoque do atacado, atualizado da Torre a cada hora</li>
+          <li>A proposta com os 3 SKUs mais parados</li>
+          <li>O gestor aprova a campanha</li>
+          <li>O link do cliente: aderir, pedir outros itens ou recusar</li>
+          <li>O painel: adesão, comercial e receita</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 Métricas e projeção · 3:30 a 4:00 · âncora: o número que fica na cabeça -->
+  <section class="slide" data-janela="Métricas e projeção · 3:30 a 4:00" data-nota="MÉTRICAS E PROJEÇÃO (âncora). Processo: a adesão da campanha, medida no painel. Negócio: os três números de A Meta, de Goldratt: ganho sobe, inventário desce, despesa operacional quase não muda (só o frete grátis). Preencha ganho e inventário com a projeção do painel antes de apresentar. Diga que é estimativa: a primeira proposta ainda espera aprovação.">
+    <h2>Um número de processo, um de negócio</h2>
+    <div class="lado" style="grid-template-columns:1fr 1.35fr">
+      <div class="coluna antes">
+        <h3>Processo: adesão à campanha</h3>
+        <p class="de">Primeira proposta, aguardando aprovação</p>
+        <div class="linha-m"><span>Clientes na proposta</span><span class="num">100</span></div>
+        <div class="linha-m"><span>Valor ofertado</span><span class="num">R$ 276 mil</span></div>
+        <div class="linha-m"><span>Adesão</span><span class="num campo" contenteditable="true" data-k="crm-adesao" data-ph="?%">?%</span></div>
+      </div>
+      <div class="coluna depois">
+        <h3>Negócio: uma campanha em A Meta</h3>
+        <p class="de">Estimativa, não venda</p>
+        <div class="meta-col">
+          <div><b>Ganho</b><span class="num campo" contenteditable="true" data-k="crm-ganho" data-ph="R$ ?">R$ ?</span><p>margem dos pedidos aderidos, pela projeção do painel</p></div>
+          <div><b>Inventário</b><span class="num campo" contenteditable="true" data-k="crm-inv" data-ph="− R$ ?">− R$ ?</span><p>custo das caixas que saem do parado</p></div>
+          <div><b>Despesa</b><span class="num">só frete</span><p>frete grátis acima de R$ 1.500; nenhum time novo</p></div>
+        </div>
+      </div>
+    </div>
+    <p class="nota" style="margin-top:auto">Referência de adesão: se repetir os 36% de aprovação dos links do Gira, os R$ 276 mil da primeira proposta viram cerca de R$ 99 mil em pedidos. Ganho e inventário dependem da margem e do custo dos 3 SKUs, que estão no painel.</p>
+  </section>
+
+  <!-- 7 Impacto e implantação · 4:00 a 5:00 · viabilidade: o que muda e como chegar lá -->
+  <section class="slide escuro" data-janela="Impacto e implantação · 4:00 a 5:00" data-nota="IMPACTO E IMPLANTAÇÃO (viabilidade). O que muda, o primeiro passo e o que falta. Seja honesto: hoje todas as ofertas saem à vista ou PIX porque falta a lista de inadimplentes, e o disparo ainda está em teste. Termine com a pergunta da carta do CEO e a resposta.">
+    <h2>O que muda e o primeiro passo</h2>
+    <div class="tres">
+      <div class="item"><b>O que muda</b><p>Toda segunda o gestor aprova uma campanha pronta. O cliente adere sozinho, e o vendedor recebe só quem quer incluir outros itens.</p></div>
+      <div class="item nao"><b>Primeiro passo</b><p>Aprovar a primeira proposta, R$ 276 mil em ofertas para 100 clientes, e disparar.</p></div>
+      <div class="item"><b>O que falta</b><p>A lista de inadimplentes da Torre, para liberar prazo ao Score A, e a API oficial do WhatsApp (RD Conversas) para o disparo automático.</p></div>
+    </div>
+    <p class="resposta" style="margin-top:auto"><span>Isso faz a empresa ganhar mais dinheiro agora e no futuro?</span>Sim: transforma estoque parado e cliente parado em pedido, toda semana, sem time novo.</p>
+  </section>
+
+  <!-- 8 Apêndice: como funciona tecnicamente -->
+  <section class="slide escuro" data-janela="Apêndice" data-nota="Use se a banca perguntar como funciona tecnicamente.">
+    <h2>Como funciona tecnicamente</h2>
+    <div class="fluxo">
+      <div class="elo"><b>Torre B2B</b><span>Estoque dos CDs de ES e RJ a cada hora e histórico de compra dos clientes</span></div>
+      <div class="elo agente"><b>IA</b><span>Monta a proposta: 3 SKUs mais parados, 100 clientes, caixas e condição de cada um</span></div>
+      <div class="elo"><b>Gestor</b><span>Aprova a campanha na segunda de manhã</span></div>
+      <div class="elo"><b>WhatsApp</b><span>Link do cliente: aderir, pedir outros itens ou recusar</span></div>
+      <div class="elo"><b>Painel</b><span>Adesão, direcionados ao comercial, receita e projeção do mês e do ano</span></div>
+    </div>
+    <p class="volta"><i></i>O resultado de cada campanha alimenta a da semana seguinte<i></i></p>
+    <p class="nota" style="margin-top:auto">Painel e página do cliente publicados no GoDeploy. O estoque é reservado antes de distribuir as caixas. Disparos ainda em modo teste.</p>
+  </section>
+
+  <!-- 9 Apêndice: sabatina -->
+  <section class="slide" data-janela="Apêndice" data-nota="Respostas curtas. Se não souber: ainda não chegamos lá, o próximo passo é...">
+    <h2>Para a sabatina</h2>
+    <div class="qa">
+      <div><b>Não é só mais uma campanha?</b><p>É uma por semana, com só os 3 SKUs mais parados, só para os 100 clientes com maior potencial, e não repete para quem já recebeu os mesmos produtos.</p></div>
+      <div><b>Isso não atropela o vendedor?</b><p>O gestor aprova antes do disparo, e todo cliente que pede outros itens vai direto para o vendedor.</p></div>
+      <div><b>E o risco de crédito?</b><p>Prazo só para Score A sem inadimplência. Enquanto a Torre não manda a lista de inadimplentes, tudo sai à vista ou PIX.</p></div>
+      <div><b>Qual o resultado real e o próximo passo?</b><p>Ainda nenhum pedido: a primeira proposta, R$ 276 mil para 100 clientes, espera aprovação, e o disparo está em teste. Próximo: aprovar, receber os inadimplentes e ligar o RD Conversas.</p></div>
+    </div>
+  </section>
+
+  <span class="janela" id="janela"></span>
+  <span class="marca">gogroup</span>
+  <div class="notas" id="notas"></div>
+  <div class="progresso" id="progresso"></div>
+</div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const slides = [...document.querySelectorAll(".slide")];
+  let i = 0, inicio = null, tick = null;
+
+  // Desenhos de unidades: 37 de 40 SKUs, 1 de 62 campanhas
+  $("#g40").innerHTML = Array.from({ length: 40 }, (_, k) => `<span class="cel${k >= 37 ? " livre" : ""}"></span>`).join("");
+  $("#g62").innerHTML = Array.from({ length: 62 }, (_, k) => `<span class="bola${k === 0 ? " sim" : ""}"></span>`).join("");
+
+  function mostrar(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle("on", k === i));
+    const s = slides[i];
+    $("#pos").textContent = (i + 1) + "/" + slides.length;
+    $("#janela").textContent = s.dataset.janela || "";
+    $("#notas").textContent = s.dataset.nota || "";
+    $("#progresso").style.width = ((i + 1) / slides.length * 100) + "%";
+    const escuro = s.classList.contains("escuro");
+    $("#janela").style.color = escuro ? "rgba(255,255,255,.7)" : "";
+    document.querySelector(".marca").style.color = escuro ? "#fff" : "";
+    if (i > 0 && !inicio) { inicio = Date.now(); tick = setInterval(relogio, 1000); }
+  }
+  function relogio() {
+    const t = Math.floor((Date.now() - inicio) / 1000);
+    $("#relogio").textContent = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+  }
+
+  $("#ant").onclick = () => mostrar(i - 1);
+  $("#prox").onclick = () => mostrar(i + 1);
+  $("#btnNotas").onclick = () => document.body.classList.toggle("com-notas");
+  $("#btnTela").onclick = () => {
+    const w = $("#wrap");
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    document.body.classList.add("apresentando");
+    if (w.requestFullscreen) w.requestFullscreen().catch(() => {});
+  };
+  document.addEventListener("fullscreenchange", () => document.body.classList.toggle("apresentando", !!document.fullscreenElement));
+  document.addEventListener("keydown", (e) => {
+    if (document.activeElement && document.activeElement.isContentEditable) return;
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); mostrar(i + 1); }
+    if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); mostrar(i - 1); }
+    if (e.key === "n" || e.key === "N") document.body.classList.toggle("com-notas");
+    if (e.key === "Home") { inicio = null; clearInterval(tick); $("#relogio").textContent = "0:00"; mostrar(0); }
+  });
+
+  // Vídeo da demo: arquivo local, só neste navegador
+  $("#arquivo").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const v = document.createElement("video");
+    v.src = URL.createObjectURL(f); v.controls = true; v.playsInline = true;
+    $("#tela").replaceChildren(v);
+  });
+
+  // Números do teste: digitados pela equipe, salvos neste navegador
+  const KEY = "pitch-estoque-parado-resultados";
+  let dados = {};
+  try { dados = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+  document.querySelectorAll(".campo").forEach((c) => {
+    if (dados[c.dataset.k]) c.textContent = dados[c.dataset.k];
+    c.addEventListener("focus", () => {
+      if (c.textContent === c.dataset.ph) { const r = document.createRange(); r.selectNodeContents(c); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    });
+    c.addEventListener("input", () => {
+      const t = c.textContent.trim();
+      if (t && t !== c.dataset.ph) dados[c.dataset.k] = t; else delete dados[c.dataset.k];
+      try { localStorage.setItem(KEY, JSON.stringify(dados)); } catch (e) {}
+    });
+    c.addEventListener("blur", () => { if (!c.textContent.trim()) c.textContent = c.dataset.ph; });
+    c.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); c.blur(); } });
+  });
+
+  mostrar(0);
+})();
+</script>
+</body>
+</html>
