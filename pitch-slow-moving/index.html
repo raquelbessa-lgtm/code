@@ -183,6 +183,8 @@ body.apresentando .campo { border-bottom-color: transparent; }
 .fecho-linha { margin-top: auto; font-size: 2.6cqw; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; color: var(--azul); max-width: 40ch; }
 .fecho-linha span { color: var(--vermelho); font-size: 4.4cqw; margin-right: .6cqw; }
 
+.pergunta { font-size: 7cqw; max-width: 16ch; }
+
 /* Fechamento */
 .fecho { justify-content: center; gap: 2.4cqw; }
 .fecho .gigante { font-size: 16cqw; }
@@ -213,7 +215,7 @@ body.com-notas .notas { display: block; }
   <span class="dica">← → navega · N notas · Home zera o tempo</span>
   <span class="relogio" id="relogio" title="Tempo desde o segundo slide">0:00</span>
   <button id="ant" aria-label="Slide anterior">Anterior</button>
-  <span class="pos" id="pos" aria-live="polite">1/10</span>
+  <span class="pos" id="pos" aria-live="polite">1/11</span>
   <button id="prox" aria-label="Próximo slide">Próximo</button>
   <button id="btnNotas">Notas</button>
   <button class="go" id="btnTela">Apresentar</button>
@@ -222,8 +224,20 @@ body.com-notas .notas { display: block; }
 <div class="palco-wrap" id="wrap">
 <div class="palco" id="palco">
 
+  <!-- 0 Abertura · pergunta de impacto -->
+  <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:09" data-nota="“Sabe quantos SKUs da Barbours estão parados? Trinta?” (pausa, e passa o slide)">
+    <p class="grande pergunta">Quantos SKUs da Barbours estão parados?</p>
+  </section>
+  <!-- 2 Abertura · 0:00 a 0:15 · o impacto em um número -->
+  <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:09" data-nota="“Não. Noventa e seis por cento dos SKUs. Mais de 5 milhões de reais parados.”">
+    <div class="par">
+      <div><div class="gigante">96%</div><p class="legenda">dos Barbours de maior valor estão travados no estoque</p></div>
+      <div><div class="gigante">R$ 5,1 mi</div><p class="legenda">travados na Gobeaute</p></div>
+    </div>
+    <p class="nota">R$ 5,1 mi: slow moving oficial da Gobeaute (19,2% de R$ 26,6 mi em estoque, 774 SKUs).</p>
+  </section>
   <!-- 1 Abertura · 0:00 a 0:15 -->
-  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:09" data-nota="“Somos o DRIFT: Wilkerson, Larissa, Raquel e Rafael. Nosso desafio é o estoque parado do B2B Gobeaute.”">
+  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:09" data-nota="“E o DRIFT chegou pra resolver isso: Direcionamento e Retirada de Itens por Fluxo e Tarifa. Somos Wilkerson, Larissa, Raquel e Rafael.”">
     <div class="capa-nome">
       <h1 class="titulo-capa">D.R.I.F.T.</h1>
       <p class="sigla"><b>D</b>irecionamento e <b>R</b>etirada de <b>I</b>tens por <b>F</b>luxo e <b>T</b>arifa</p>
@@ -234,14 +248,6 @@ body.com-notas .notas { display: block; }
       <li><b>Raquel Bessa</b></li>
       <li><b>Rafael Craveiro</b></li>
     </ul>
-  </section>
-  <!-- 2 Abertura · 0:00 a 0:15 · o impacto em um número -->
-  <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:09" data-nota="“Noventa e seis por cento dos Barbours estão travados. Na Gobeaute, são 5,1 milhões de reais travados.”">
-    <div class="par">
-      <div><div class="gigante">96%</div><p class="legenda">dos Barbours de maior valor estão travados no estoque</p></div>
-      <div><div class="gigante">R$ 5,1 mi</div><p class="legenda">travados na Gobeaute</p></div>
-    </div>
-    <p class="nota">R$ 5,1 mi: slow moving oficial da Gobeaute (19,2% de R$ 26,6 mi em estoque, 774 SKUs).</p>
   </section>
   <!-- 2 Dor · 0:15 a 0:50 (1/2) -->
   <section class="slide" data-janela="Dor e usuário-chave · 0:09 a 0:30" data-nota="“E três em cada quatro Barbours estão parados há mais de um ano. Quem sofre é o comercial: tem o produto que travou de um lado e o cliente que sumiu do outro. Vender o que não sai dá trabalho, e ninguém quer perder tempo nisso.”">
