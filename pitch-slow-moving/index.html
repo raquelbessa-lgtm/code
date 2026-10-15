@@ -177,6 +177,12 @@ body.apresentando .campo { border-bottom-color: transparent; }
 .par .legenda { font-size: 2.4cqw; max-width: 18ch; }
 .par + .nota { margin-top: auto; }
 
+/* Dor: frase de fechamento */
+.frase-dor { font-size: 2.6cqw; font-weight: 800; letter-spacing: -.02em; color: var(--azul); }
+/* Impacto: linha de fechamento */
+.fecho-linha { margin-top: auto; font-size: 2.6cqw; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; color: var(--azul); max-width: 40ch; }
+.fecho-linha span { color: var(--vermelho); font-size: 4.4cqw; margin-right: .6cqw; }
+
 /* Fechamento */
 .fecho { justify-content: center; gap: 2.4cqw; }
 .fecho .gigante { font-size: 16cqw; }
@@ -207,7 +213,7 @@ body.com-notas .notas { display: block; }
   <span class="dica">← → navega · N notas · Home zera o tempo</span>
   <span class="relogio" id="relogio" title="Tempo desde o segundo slide">0:00</span>
   <button id="ant" aria-label="Slide anterior">Anterior</button>
-  <span class="pos" id="pos" aria-live="polite">1/13</span>
+  <span class="pos" id="pos" aria-live="polite">1/10</span>
   <button id="prox" aria-label="Próximo slide">Próximo</button>
   <button id="btnNotas">Notas</button>
   <button class="go" id="btnTela">Apresentar</button>
@@ -217,7 +223,7 @@ body.com-notas .notas { display: block; }
 <div class="palco" id="palco">
 
   <!-- 1 Abertura · 0:00 a 0:15 -->
-  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:15" data-nota="“Somos o time do DRIFT: Direcionamento e Retirada de Itens por Fluxo e Tarifa. Wilkerson, Larissa, Raquel e Rafael.”">
+  <section class="slide escuro capa" data-janela="Abertura · 0:00 a 0:09" data-nota="“Somos o DRIFT: Wilkerson, Larissa, Raquel e Rafael. Nosso desafio é o estoque parado do B2B Gobeaute.”">
     <div class="capa-nome">
       <h1 class="titulo-capa">D.R.I.F.T.</h1>
       <p class="sigla"><b>D</b>irecionamento e <b>R</b>etirada de <b>I</b>tens por <b>F</b>luxo e <b>T</b>arifa</p>
@@ -229,18 +235,16 @@ body.com-notas .notas { display: block; }
       <li><b>Rafael Craveiro</b></li>
     </ul>
   </section>
-
   <!-- 2 Abertura · 0:00 a 0:15 · o impacto em um número -->
-  <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:15" data-nota="“Sabe quantos dos nossos Barbours estão travados no estoque? (pausa) Noventa e seis por cento. Na Gobeaute, são 5,1 milhões de reais travados. O DRIFT existe para destravar esse estoque e fazer ele deslizar até o pedido.”">
+  <section class="slide escuro fecho" data-janela="Abertura · 0:00 a 0:09" data-nota="“Noventa e seis por cento dos Barbours estão travados. Na Gobeaute, são 5,1 milhões de reais travados.”">
     <div class="par">
       <div><div class="gigante">96%</div><p class="legenda">dos Barbours de maior valor estão travados no estoque</p></div>
       <div><div class="gigante">R$ 5,1 mi</div><p class="legenda">travados na Gobeaute</p></div>
     </div>
     <p class="nota">R$ 5,1 mi: slow moving oficial da Gobeaute (19,2% de R$ 26,6 mi em estoque, 774 SKUs).</p>
   </section>
-
   <!-- 2 Dor · 0:15 a 0:50 (1/2) -->
-  <section class="slide" data-janela="Dor e usuário-chave · 0:15 a 0:50" data-nota="“Três em cada quatro desses produtos estão travados há mais de um ano. É dinheiro parado e espaço ocupado no depósito.”">
+  <section class="slide" data-janela="Dor e usuário-chave · 0:09 a 0:30" data-nota="“E três em cada quatro Barbours estão parados há mais de um ano. Quem sofre é o comercial: tem o produto que travou de um lado e o cliente que sumiu do outro. Vender o que não sai dá trabalho, e ninguém quer perder tempo nisso.”">
     <h2>3 em cada 4 estão travados há mais de 1 ano</h2>
     <div class="dor">
       <div>
@@ -256,17 +260,11 @@ body.com-notas .notas { display: block; }
         <p>dos SKUs Barbours do topo do B2B (20 de 27) têm estoque para mais de um ano</p>
       </div>
     </div>
+    <p class="frase-dor">O produto que travou e o cliente que sumiu. Ninguém faz a manobra.</p>
     <p class="nota">Fonte: Torre B2B, snapshot de 15/10/2026, SKUs Barbours entre os 40 de maior valor em estoque no B2B. Cobertura no ritmo de venda dos últimos 15 dias. 26 de 27 passam de 180 dias (96%).</p>
   </section>
-
-  <!-- 3 Dor · 0:15 a 0:50 (2/2) -->
-  <section class="slide escuro" data-janela="Dor e usuário-chave · 0:15 a 0:50" data-nota="“De um lado, o produto que travou. Do outro, o cliente que sumiu. E ninguém faz a manobra que liga os dois. Vender o que não sai dá mais trabalho do que vender o que sai. Então nenhum vendedor quer perder tempo nesses produtos.”">
-    <p class="grande" style="margin-top:auto">O produto que travou e o cliente que sumiu. Ninguém faz a manobra.</p>
-    <p class="sub">Vender o que não sai dá mais trabalho, e nenhum vendedor quer gastar tempo nisso.</p>
-  </section>
-
   <!-- 4 Fluxo atual · 0:50 a 1:20 -->
-  <section class="slide" data-janela="Fluxo atual · 0:50 a 1:20" data-nota="“Hoje, no B2B, não existe nenhuma ação voltada para slow moving. O vendedor acelera no que já sai, o produto travado fica fora da pista e o cliente que parou ninguém procura. É uma curva que ninguém faz, e que deixa dinheiro parado. O alvo do DRIFT não é quem já compra. Quem já compra, compra. O alvo é o varejista e o cliente menor que comprou há muito tempo e parou. Para ele, uma oferta relâmpago, de um único produto: escolha rápida, sem tempo de frear na indecisão.”">
+  <section class="slide" data-janela="Fluxo atual · 0:30 a 0:48" data-nota="“Hoje, nenhuma ação do B2B olha para o slow moving. O vendedor acelera no que já sai, e o varejista que comprou e parou ninguém procura. É uma curva que ninguém faz. Quem já compra, compra: o nosso alvo é quem parou.”">
     <h2>Hoje, no B2B, ninguém trabalha o slow moving</h2>
     <div class="fluxo claro" style="margin-top:1.4cqw">
       <div class="elo"><b>O vendedor vende o que sai</b><span>O tempo vai para o que gira</span></div>
@@ -280,9 +278,8 @@ body.com-notas .notas { display: block; }
       <div class="bloco sim"><b>O alvo</b><p>O varejista e o cliente menor que comprou e parou. Para ele, uma oferta relâmpago de um único produto.</p></div>
     </div>
   </section>
-
   <!-- 5 Solução com IA · 1:20 a 2:10 (1/2) -->
-  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="“O DRIFT é o nosso robô humanoide de manobra rápida. Quando um lote de produtos trava no estoque, o DRIFT entra em ação: calcula o risco de crédito do cliente, faz o ajuste preciso de preço e prazo, e faz o produto deslizar do depósito direto para o pedido do cliente. Ele opera sozinho, do começo ao fim. Escolhe o produto travado, de slow moving ou descontinuado. Escolhe os clientes que compraram e pararam. Monta uma caixa fechada, com um único produto e a oferta já definida, dentro da faixa de tabela e acima do piso de margem: o cliente só precisa dizer sim ou não. Envia pelo WhatsApp, e o cliente fecha pelo link. Sem ninguém no meio, sem freio.”">
+  <section class="slide escuro" data-janela="Solução com IA · 0:48 a 1:18" data-nota="“O DRIFT é o nosso robô de manobra rápida. Quando um lote trava, ele age sozinho: escolhe o produto, escolhe os varejistas que pararam, calcula o risco de crédito e ajusta preço e prazo.”">
     <h2>O DRIFT opera sozinho, do começo ao fim</h2>
     <p class="metafora">Quando um lote trava no estoque, o DRIFT calcula o risco de crédito do cliente, ajusta preço e prazo e faz o produto deslizar do depósito direto para o pedido.</p>
     <div class="fluxo" style="margin-top:auto">
@@ -294,9 +291,8 @@ body.com-notas .notas { display: block; }
     </div>
     <p class="volta"><i></i>Cada resposta volta para a Torre e calibra a próxima manobra<i></i></p>
   </section>
-
   <!-- 6 Solução com IA · 1:20 a 2:10 (2/2) -->
-  <section class="slide escuro" data-janela="Solução com IA · 1:20 a 2:10" data-nota="“E cada manobra é calibrada para o cliente. Inadimplente recebe proposta para pagar à vista. Score alto ganha prazo de 30 a 90 dias. Toda semana o DRIFT entra numa pista nova: uma oferta nova, para uma base diferente, escolhida pelo comportamento de compra e pela qualificação do cliente. Cada cliente recebe pelo menos uma oferta por mês. Se ele não responde, em dois dias o DRIFT volta com um update.”">
+  <section class="slide escuro" data-janela="Solução com IA · 0:48 a 1:18" data-nota="“Inadimplente paga à vista; score alto ganha de 30 a 90 dias. A oferta é relâmpago, de um único produto, acima do piso de margem. Sai no WhatsApp, e o cliente fecha pelo link, sem ninguém no meio.”">
     <h2>Uma manobra calibrada para cada cliente, toda semana</h2>
     <div class="regras">
       <div class="regra"><b>Inadimplente</b><p>Recebe a proposta para pagar à vista.</p></div>
@@ -307,9 +303,8 @@ body.com-notas .notas { display: block; }
       <div class="regra"><b>Sim ou não</b><p>Um único produto, validade curta, nenhuma margem para indecisão.</p></div>
     </div>
   </section>
-
   <!-- 7 Demo · 2:10 a 3:30 -->
-  <section class="slide" data-janela="Demo · 2:10 a 3:30" data-nota="“Aqui é o DRIFT na pista. Primeiro ele olha o estoque na Torre e escolhe um Barbours travado, com mais de um ano de cobertura. Depois cruza com a base de clientes: só varejistas que compraram esse produto e pararam. Para cada um, ele calibra a manobra: um único produto, a quantidade que o cliente costumava comprar, o preço dentro da faixa de tabela e acima do piso de margem, e a condição pelo crédito: à vista para quem está inadimplente, prazo para quem tem score alto. A mensagem sai no WhatsApp, com validade curta. Do lado do cliente, ele abre o link e fecha o pedido, sem falar com ninguém. O produto deslizou do depósito para o pedido, e o resultado volta para a Torre.” (Não corte a demo. Se o envio automático ainda não estiver no ar, mostre o que roda hoje e diga: o envio automático é o próximo passo do piloto.)">
+  <section class="slide" data-janela="Demo · 1:18 a 2:06" data-nota="“Aqui é o DRIFT na pista. Ele olha o estoque na Torre e escolhe um Barbours travado. Cruza com os varejistas que compraram esse produto e pararam. Para cada um, calibra a proposta: quantidade, preço dentro da tabela e condição pelo crédito. A mensagem sai no WhatsApp, com validade curta. O cliente abre o link e fecha o pedido. O produto deslizou do depósito para o pedido.” (Vídeo de até 48 segundos. Não corte a demo: se faltar tempo, corte texto.)">
     <h2>Funcionando</h2>
     <div class="demo">
       <div class="tela" id="tela">
@@ -332,9 +327,8 @@ body.com-notas .notas { display: block; }
       </div>
     </div>
   </section>
-
   <!-- 8 Métricas e projeção · 3:30 a 4:00 -->
-  <section class="slide escuro" data-janela="Métricas e projeção · 3:30 a 4:00" data-nota="“Esse público já foi nosso. São 565 varejistas que compraram Barbours este ano e pararam. Com 100 contatos por semana e 10% de conversão, no ticket deles, de uns 1.600 reais por pedido, o DRIFT traz 70 mil reais por mês. Mais do que a meta de 50 mil de um vendedor padrão, sem um vendedor a mais. Em doze meses, 840 mil reais. E cada venda faz até 39 mil reais por mês de estoque travado deslizar para fora da prateleira. No piloto a gente mede quatro números: propostas enviadas, abertas, fechadas e valor aprovado. Em duas semanas a gente sabe a conversão real.”">
+  <section class="slide escuro" data-janela="Métricas e projeção · 2:06 a 2:24" data-nota="“São 565 varejistas que pararam. Com 100 contatos por semana e 10% de conversão, o DRIFT traz 70 mil reais por mês: mais que a meta de 50 mil de um vendedor, sem um vendedor a mais. São 840 mil reais em um ano.”">
     <h2>R$ 70 mil por mês: mais que um vendedor</h2>
     <div class="meta-lado">
       <div class="chave"><b>Ganho</b><span class="num">R$ 70 mil/mês</span><p><strong>R$ 840 mil em 12 meses.</strong> 565 varejistas que pararam, 100 contatos por semana, 10% de conversão, ticket de R$ 1.635. Acima da meta de R$ 50 mil de um vendedor padrão.</p></div>
@@ -350,9 +344,8 @@ body.com-notas .notas { display: block; }
     </div>
     <p class="nota">Projeção com base na Torre B2B (desde 02/01/2026): varejistas sem compra há mais de 90 dias, sem os 11 com mais de R$ 20 mil em Barbours. Receita, não margem. A conversão de 10% é a meta; o piloto mede a real.</p>
   </section>
-
   <!-- 9 Impacto e implantação · 4:00 a 5:00 (1/2) -->
-  <section class="slide escuro" data-janela="Impacto e implantação · 4:00 a 5:00" data-nota="“Toda semana o DRIFT escolhe um produto travado e uma base de clientes que pararam, monta a oferta, envia e acompanha. O cliente fecha pelo link, e o resultado volta para a Torre e calibra a próxima manobra.”">
+  <section class="slide escuro" data-janela="Impacto e implantação · 2:24 a 3:00" data-nota="“Toda semana, o DRIFT faz a volta completa: escolhe, envia, acompanha, e o resultado volta para a Torre.”">
     <h2>Como liga</h2>
     <div class="fluxo" style="margin-top:auto">
       <div class="elo"><b>Torre e Data Mart</b><span>Estoque, pedidos, crédito e contato de cada cliente</span></div>
@@ -363,9 +356,8 @@ body.com-notas .notas { display: block; }
     </div>
     <p class="volta"><i></i>Toda semana, um produto travado e uma pista nova<i></i></p>
   </section>
-
   <!-- 10 Impacto e implantação · 4:00 a 5:00 (2/2) -->
-  <section class="slide" data-janela="Impacto e implantação · 4:00 a 5:00" data-nota="“O que muda: o slow moving passa a ter piloto. O DRIFT faz essa curva toda semana, sem tirar o vendedor da pista dele. E ele tem travas: nunca passa do piso de margem, inadimplente só recebe proposta à vista, e o cliente pode pedir para sair. Precisamos de duas aprovações: a alçada de preço e prazo com o comercial, e o piso de margem com Finanças. Na segunda-feira o DRIFT entra na pista: um produto de Barbours, clientes que pararam, duas semanas.”">
+  <section class="slide" data-janela="Impacto e implantação · 2:24 a 3:00" data-nota="“O que muda: o slow moving ganha um piloto, sem tirar o vendedor da pista dele, e até 39 mil reais por mês de estoque saem da prateleira. As travas: nunca abaixo do piso de margem, inadimplente só à vista, e o cliente pode sair quando quiser. Em quinze dias, a gente volta com quanto desse estoque virou dinheiro.”">
     <h2>O que muda e as travas</h2>
     <div class="tres" style="grid-template-columns:1fr 1fr">
       <div class="item"><b>O que muda</b><ul>
@@ -379,24 +371,7 @@ body.com-notas .notas { display: block; }
         <li>O cliente pode pedir para sair.</li>
       </ul></div>
     </div>
-  </section>
-
-  <!-- 11 Fechamento · até 5:00 -->
-  <section class="slide escuro fecho" data-janela="Impacto e implantação · até 5:00" data-nota="“Noventa e seis por cento dos Barbours estão travados. Deixa o DRIFT fazer a manobra: em quinze dias, a gente volta aqui com quanto desse estoque deslizou para o pedido e virou dinheiro.”">
-    <div class="gigante">96%</div>
-    <p class="grande">Em 15 dias, a gente volta com quanto desse estoque deslizou e virou dinheiro.</p>
-  </section>
-
-  <!-- 12 Apêndice: cadência -->
-  <section class="slide" data-janela="Apêndice" data-nota="Use se a banca perguntar sobre excesso de mensagens ou cadência.">
-    <h2>Cadência proposta: no máximo 3 toques</h2>
-    <div class="cadencia">
-      <div class="toque"><span class="num">D0</span><p>Proposta relâmpago com link e validade curta.</p></div>
-      <div class="toque"><span class="num">D+2</span><p>Update, se não houve resposta.</p></div>
-      <div class="toque"><span class="num">D+5</span><p>Último toque.</p></div>
-      <div class="toque fim"><span class="num">Para</span><p>Quando o cliente responde, compra ou pede para sair.</p></div>
-    </div>
-    <p class="nota" style="margin-top:auto">Ritmo: toda semana uma base diferente; cada cliente recebe pelo menos uma oferta por mês.</p>
+    <p class="fecho-linha"><span>96%</span> dos Barbours travados. Em 15 dias, a gente volta com quanto desse estoque deslizou e virou dinheiro.</p>
   </section>
 
 
@@ -432,7 +407,7 @@ body.com-notas .notas { display: block; }
   function relogio() {
     const t = Math.floor((Date.now() - inicio) / 1000);
     $("#relogio").textContent = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
-    $("#relogio").classList.toggle("estourou", t >= 300);
+    $("#relogio").classList.toggle("estourou", t >= 180);
   }
 
   $("#ant").onclick = () => mostrar(i - 1);
